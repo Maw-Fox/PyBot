@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# VSC
+.vscode/
+
+# PyBot
+creds.json

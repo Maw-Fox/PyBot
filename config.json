@@ -1,0 +1,7 @@
+{
+    "client_name": "PyBot",
+    "client_version": "0.0 A",
+    "bot_name": "PyBot",
+    "retry_interval": 15,
+    "joined_channels": ["adh-04ef230936a847d576fa"]
+}
