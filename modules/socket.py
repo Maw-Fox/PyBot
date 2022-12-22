@@ -9,8 +9,7 @@ from modules.auth import AUTH
 from modules.channel import Channel, CHANNELS, remove_from_all_channels
 from modules.command import BOT_COMMANDS
 from modules.utils import cat
-
-WS_URI: str = 'wss://chat.f-list.net/chat2'
+from modules.constants import WS_URI
 
 
 class ChatProtocol(WebSocketClientProtocol):
