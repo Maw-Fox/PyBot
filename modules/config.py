@@ -2,9 +2,8 @@ import sys as system
 import os
 import json
 import hashlib
-import hmac
 
-from modules.constants import PATH_CWD, ARGS
+from modules.constants import ARGS
 
 
 class Config:
@@ -32,30 +31,28 @@ def do_crypt(passphrase: str, password: str, forward: bool = True) -> bytes:
     key.update(bytes(passphrase, encoding='UTF-8'))
     bytes_passphrase: bytes = key.digest()
     bytes_list: list[int] = []
+    bytes_password: bytes
 
     if forward:
-        bytes_password: bytes = bytes(password, 'UTF-8')
-        for b_idx in range(len(bytes_passphrase)):
-            if b_idx >= len(bytes_password):
-                bytes_list.append(bytes_passphrase[b_idx])
-                continue
-            bytes_list.append(
-                bytes_passphrase[b_idx] ^ bytes_password[b_idx]
-            )
-        return bytes(bytes_list)
+        bytes_password = bytes(password, 'UTF-8')
     else:
-        bytes_password: bytes = bytes.fromhex(password)
-        for b_idx in range(len(bytes_passphrase)):
-            bytes_list.append(
-                bytes_passphrase[b_idx] ^ bytes_password[b_idx]
-            )
-        return bytes(bytes_list)
+        bytes_password = bytes.fromhex(password)
+
+    for b_idx in range(len(bytes_passphrase)):
+        if forward and b_idx >= len(bytes_password):
+            bytes_list.append(bytes_passphrase[b_idx])
+            continue
+        bytes_list.append(
+            bytes_passphrase[b_idx] ^ bytes_password[b_idx]
+        )
+
+    return bytes(bytes_list)
 
 
 def get_config():
-    if os.path.exists(os.path.join(PATH_CWD, 'config.json')):
+    if os.path.exists('config.json'):
         file = open(
-            os.path.join(PATH_CWD, 'config.json'),
+            'config.json',
             'r',
             encoding='UTF-8'
         )
@@ -82,10 +79,10 @@ def get_credentials():
             'username': ARGS.username,
             'password': ARGS.password
         }
-    if os.path.exists(os.path.join(PATH_CWD, 'creds.json')):
-        passphrase = input('passphrase (q to quit):')
+    if os.path.exists('creds.json'):
+        passphrase = input('passphrase:')
         f = open(
-            os.path.join(PATH_CWD, 'creds.json'),
+            'creds.json',
             'r',
             encoding='UTF-8'
         )
@@ -93,12 +90,34 @@ def get_credentials():
         result = do_crypt(passphrase, f_data['password'], False)
         try:
             f_data['password'] = result.decode('UTF-8')
-        except Exception as err:
+        except Exception:
             system.exit('Invalid passphrase.')
 
         return f_data
     else:
-        system.exit('No creds.json exists.')
+        print('creds.json doesn\'t exist or username and password not set.')
+        print('Running first-time credential setup...')
+        username = input('Account name:')
+        password = input('Password:')
+        passphrase = input('Passphrase (empty to skip):')
+        if not username or not password:
+            system.exit('Password or account name is invalid, aborting...')
+        if passphrase:
+            f = open('creds.json', 'w', encoding='UTF-8')
+            f.write(
+                json.dumps(
+                    {
+                        'username': username,
+                        'password': do_crypt(passphrase, password).hex()
+                    },
+                    indent=2
+                )
+            )
+            f.close()
+        return {
+            'username': username,
+            'password': password
+        }
 
 
 CONFIG: Config = Config(**get_config(), **get_credentials())
