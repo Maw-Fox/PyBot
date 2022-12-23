@@ -49,7 +49,7 @@ def do_crypt(passphrase: str, password: str, forward: bool = True) -> bytes:
     return bytes(bytes_list)
 
 
-def get_config():
+def get_config() -> dict[str, str | int]:
     if os.path.exists('config.json'):
         file = open(
             'config.json',
@@ -61,7 +61,7 @@ def get_config():
         system.exit('No config.json exists.')
 
 
-def get_credentials():
+def get_credentials() -> dict[str, str]:
     if ARGS.username and ARGS.password:
         if not ARGS.skip_phrase:
             passphrase = input('Set a passphrase (leave empty to skip):')

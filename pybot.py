@@ -1,5 +1,4 @@
 import asyncio
-import argparse
 
 from modules.socket import SOCKET
 
