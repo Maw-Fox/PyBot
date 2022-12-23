@@ -14,7 +14,7 @@ from modules.constants import WS_URI
 
 class Queue:
     last: float = time()
-    throttle: float = 2e3
+    throttle: float = 2
 
     def __init__(self, callback, data):
         self.data = data
@@ -23,7 +23,7 @@ class Queue:
 
     async def run(self) -> None:
         queue.pop(queue.index(self))
-        await self.callback(**self.data)
+        await self.callback(self.data)
 
     async def cycle() -> None:
         if len(queue) and time() - Queue.last > Queue.throttle:
@@ -115,8 +115,6 @@ class Response:
         CHANNELS[data['channel']].remove_user(data['character'])
 
     async def PIN(data) -> None:
-        print(json.dumps(CHANNELS))
-        print('Pongers')
         await Output.ping()
 
     async def PRI(data) -> None:
@@ -139,7 +137,39 @@ class Response:
 
         extras = {
             'params': args,
-            'sender': character
+            'from': character,
+            'channel': ''
+        }
+
+        print(extras)
+        print(BOT_COMMANDS.get(command))
+        if not BOT_COMMANDS.get(command):
+            return await output.send(
+                f'Unknown command "[b]{command}[/b]", type \'[i]!help[/i]\' ',
+                'for a list of commands.'
+            )
+
+        await BOT_COMMANDS.get(command).solver(extras)
+
+    async def MSG(data) -> None:
+        message: str = data['message']
+        character: str = data['character']
+        channel = data['channel']
+        output = Output(channel=channel)
+        if message[:1] != '!':
+            return
+        exploded: list[str] = message[1:].split(' ')
+        command: str = exploded[0]
+        args: str = ''
+
+        if len(exploded) > 1:
+            exploded.pop(0)
+            args = ' '.join(exploded)
+
+        extras = {
+            'params': args,
+            'from': character,
+            'channel': channel
         }
 
         print(extras)
@@ -171,6 +201,7 @@ class Output:
         self.send = self.__send_channel
 
     async def __send_private(self, *message) -> None:
+        print(time() - Queue.last, Queue.throttle)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_private, message)
             return
@@ -179,7 +210,7 @@ class Output:
 
         message: dict[str, str] = {
             'recipient': self.recipient,
-            'message': cat(message)
+            'message': cat(*message)
         }
 
         await SOCKET.send(f'PRI {json.dumps(message)}')
@@ -193,7 +224,7 @@ class Output:
 
         message: dict[str, str] = {
             'channel': self.channel,
-            'message': cat(message)
+            'message': cat(*message)
         }
 
         await SOCKET.send(f'MSG {json.dumps(message)}')

@@ -1,5 +1,5 @@
 import sys as system
-from time import sleep, time
+from time import time
 
 from modules.utils import cat
 from modules.command import BotCommand, BOT_COMMANDS
@@ -28,9 +28,22 @@ class HPUser:
 hp_users: list[HPUser] = []
 
 
+def get_params(s: str, n_params: int) -> str:
+    exploded = s.split(' ')
+    params: list[str] = []
+
+    for idx in range(n_params):
+        if idx == n_params - 1:
+            params.append(' '.join(exploded[idx:]))
+            break
+        params.append(exploded[idx])
+
+    return params
+
+
 def get_output(args) -> Output:
-    if not args['is_channel']:
-        return Output(recipient=args['sender'])
+    if not args['channel']:
+        return Output(recipient=args['from'])
     else:
         return Output(channel=args['channel'])
 
@@ -38,18 +51,30 @@ def get_output(args) -> Output:
 def propagate_commands() -> None:
     async def help(args) -> None:
         output = get_output(args)
+        params: str = args['params']
+
+        if not params:
+            out_str: str = '[b]List of available commands:[/b]\n'
+            for cmd_name in BOT_COMMANDS:
+                command = BOT_COMMANDS[cmd_name]
+                out_str += f'[i]{command.command_name}[/i],'
+
+            out_str = out_str[:len(out_str) - 1]
+            return await output.send(out_str)
+
+        params: list[str] = get_params(params, 1)
+        subcommand: str = params[0]
 
         if not hasattr(BOT_COMMANDS, args.subcommand):
-            return await output.send('Unknown command.')
+            return await output.send
 
         await output.send(
-            BOT_COMMANDS[args['subcommand']].help
+            BOT_COMMANDS[subcommand].help
         )
 
     BotCommand(
         'help',
         help,
-        ['help', 'die', 'hp'],
         cat(
             'Insert witty joke about recursion here, or the fact I can no ',
             'longer actually help you if you need help about the help ',
@@ -58,14 +83,9 @@ def propagate_commands() -> None:
     )
 
     async def die(args) -> None:
-        by: str
         output = get_output(args)
-
-        if not args['is_channel']:
-            by = args['sender']
-        else:
-            by = args['character']
-
+        by: str = args['from']
+        print('ding')
         if by != 'Kali':
             return await output.send(
                 'No u. :>~\n[color=red][b]A C C E S S   D E N I E D',
@@ -80,7 +100,6 @@ def propagate_commands() -> None:
     BotCommand(
         'die',
         die,
-        [],
         'Kill the bot. Before you event try: [b]no[/b], you can\'t. :>~'
     )
 
@@ -90,10 +109,6 @@ def propagate_commands() -> None:
     BotCommand(
         'hp',
         hp,
-        [
-            'damage',
-            'status'
-        ],
         'HP bar formatter.'
     )
 
