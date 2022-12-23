@@ -12,13 +12,10 @@ from modules.utils import cat
 from modules.constants import WS_URI
 
 
-class ChatProtocol(WebSocketClientProtocol):
-    pass
-
-
 class Socket:
     def __init__(self) -> None:
         self.current = None
+        self.initialized = False
 
     async def read(self, code, data) -> None:
         if hasattr(Response, code):
@@ -40,8 +37,7 @@ class Socket:
             'cversion': CONFIG.client_version
         }
         async with connect(
-            WS_URI,
-            create_protocol=ChatProtocol
+            WS_URI
         ) as websocket:
             self.current = websocket
             await websocket.send(f'IDN {json.dumps(self.identity)}')
@@ -49,6 +45,13 @@ class Socket:
                 try:
                     code = message[:3]
                     data = message[4:]
+                    if not self.initialized:
+                        for c in CONFIG.joined_channels:
+                            await websocket.send(cat(
+                                'JCH ',
+                                f'{json.dumps({"channel": c})}'
+                            ))
+                        self.initialized = True
                     if data:
                         data = json.loads(data)
                     else:
@@ -57,8 +60,6 @@ class Socket:
                         AUTH.check_ticket()
                     await self.read(code, data)
                 except Exception as error:
-                    print(str(error))
-                except ConnectionClosed:
                     print(str(error))
 
     async def close(self) -> None:
@@ -72,13 +73,14 @@ class Response:
     async def ORS(data) -> None:
         for i in data['channels']:
             ch = Channel(**data['channels'][i])
-            CHANNELS[ch.channel] = ch
+            setattr(CHANNELS, ch.channel, ch)
 
     async def ICH(data) -> None:
-        channel = CHANNELS[data['channel']]
+        c = Channel(data['channel'])
+        CHANNELS[c.channel] = c
 
-        for i in data['users']:
-            channel.add_user(data['users'][i])
+        for user in data['users']:
+            c.add_user(user['identity'])
 
     async def JCH(data) -> None:
         CHANNELS[data['channel']].add_user(data['character']['identity'])

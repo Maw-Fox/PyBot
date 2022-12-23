@@ -1,17 +1,9 @@
 # PyBot
 A local F-Chat bot framework built with Python.
 
-## Usage:
+## Usage (First Time):
 `python pybot.py --username me --password qwerty`
 
-Alternatively, you can use a `creds.json` in the main repository folder and use the structure:
-```
-{
-    "username": "me",
-    "password": "qwerty"
-}
-```
+**Note:** You do not need to create a passphrase or store your passphrase-encrypted password on the filesystem, but it will require you to set the above command arguments every time you launch the bot.
 
-You may also use the `--makecreds` command argument in order to create a `creds.json` so you do not need to explicitly use command argument credentials every time you start the bot.
-
-The program will salt and do extremely rudimentary cryptography to make sure the password is not stored as plaintext during its launch. Keep in mind, this is VERY insecure but it does make it so that potential people viewing your files can't just see your password in full without performing the reversal process. It would be far more secure if the FChat/FList API allowed you to input keys and digests into a password field, but unfortunately this is not the case as it stands currently.
+Once you have a `creds.json` file created and a passphrase set, you do not require credentials on your launch arguments. Upon the next launch of the bot, you can just input your passphrase in order to decrypt your encrypted password that is stored on the local disk.

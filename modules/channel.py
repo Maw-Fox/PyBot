@@ -1,11 +1,10 @@
 class Channel:
     def __init__(
         self,
-        name: str,
-        title: str
+        name: str
     ) -> None:
         self.channel = name
-        self.title = title
+        self.title = name
         self.users: list[str] = []
 
     def remove_user(self, user: str) -> None:

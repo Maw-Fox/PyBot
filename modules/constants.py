@@ -34,16 +34,10 @@ PARSER.add_argument(
     help='Your account password. An alternative to creds.json.'
 )
 PARSER.add_argument(
-    '--makecreds',
-    '--creds',
-    dest='make_creds',
+    '--nophrase',
+    '--skip',
+    dest='skip_phrase',
     action='store_true',
-    help=cat(
-        'While inputting username and password',
-        ' (via either command args or creds.json), ',
-        'also create/modify a creds.json with a ',
-        'randomly generated SHA-256 key so that credentials',
-        ' aren\'t stored as plaintext.'
-    )
+    help='Skip the setting of the passphrase.'
 )
 ARGS = PARSER.parse_args()

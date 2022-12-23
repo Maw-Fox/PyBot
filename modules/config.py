@@ -16,8 +16,7 @@ class Config:
         client_version: str,
         retry_interval: int,
         bot_name: str,
-        joined_channels: list[str],
-        key: str = ''
+        joined_channels: list[str]
     ) -> None:
         self.account_name = username
         self.account_password = password
@@ -26,41 +25,31 @@ class Config:
         self.retry_interval = retry_interval
         self.bot_name = bot_name
         self.joined_channels = joined_channels
-        if ARGS.make_creds:
-            key: bytes = hashlib.new('sha256').digest()
-            pw: bytes = bytes(password, 'UTF-8')
-            byte_seq: list = []
-            for byte in pw:
-                for byte_2 in key:
-                    byte ^= byte_2
-                byte_seq.append(byte)
 
-            pw_encoded: bytes = bytes(byte_seq)
 
-            f = open('creds.json', 'w', encoding='UTF-8')
-            f.write(
-                json.dumps(
-                    {
-                        'username': username,
-                        'password': pw_encoded.hex(),
-                        'key': key.hex()
-                    },
-                    indent=2
-                )
+def do_crypt(passphrase: str, password: str, forward: bool = True) -> bytes:
+    key: hashlib._Hash = hashlib.new('sha512', usedforsecurity=True)
+    key.update(bytes(passphrase, encoding='UTF-8'))
+    bytes_passphrase: bytes = key.digest()
+    bytes_list: list[int] = []
+
+    if forward:
+        bytes_password: bytes = bytes(password, 'UTF-8')
+        for b_idx in range(len(bytes_passphrase)):
+            if b_idx >= len(bytes_password):
+                bytes_list.append(bytes_passphrase[b_idx])
+                continue
+            bytes_list.append(
+                bytes_passphrase[b_idx] ^ bytes_password[b_idx]
             )
-            f.close()
-            return
-
-        if key:
-            key: bytes = bytes.fromhex(key)
-            pw: bytes = bytes.fromhex(password)
-            byte_seq: list = []
-            sorted(key, reverse=True)
-            for byte in pw:
-                for byte_2 in key:
-                    byte ^= byte_2
-                byte_seq.append(byte)
-            self.account_password = bytes(byte_seq).decode('UTF-8')
+        return bytes(bytes_list)
+    else:
+        bytes_password: bytes = bytes.fromhex(password)
+        for b_idx in range(len(bytes_passphrase)):
+            bytes_list.append(
+                bytes_passphrase[b_idx] ^ bytes_password[b_idx]
+            )
+        return bytes(bytes_list)
 
 
 def get_config():
@@ -77,17 +66,37 @@ def get_config():
 
 def get_credentials():
     if ARGS.username and ARGS.password:
+        if not ARGS.skip_phrase:
+            passphrase = input('Set a passphrase (leave empty to skip):')
+            if passphrase:
+                f = open('creds.json', 'w', encoding='UTF-8')
+                f.write(json.dumps(
+                    {
+                        'username': ARGS.username,
+                        'password': do_crypt(passphrase, ARGS.password).hex()
+                    },
+                    indent=2
+                ))
+                f.close()
         return {
             'username': ARGS.username,
             'password': ARGS.password
         }
     if os.path.exists(os.path.join(PATH_CWD, 'creds.json')):
-        file = open(
+        passphrase = input('passphrase (q to quit):')
+        f = open(
             os.path.join(PATH_CWD, 'creds.json'),
             'r',
             encoding='UTF-8'
         )
-        return json.load(file)
+        f_data = json.load(f)
+        result = do_crypt(passphrase, f_data['password'], False)
+        try:
+            f_data['password'] = result.decode('UTF-8')
+        except Exception as err:
+            system.exit('Invalid passphrase.')
+
+        return f_data
     else:
         system.exit('No creds.json exists.')
 
