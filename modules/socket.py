@@ -12,6 +12,27 @@ from modules.utils import cat
 from modules.constants import WS_URI
 
 
+class Queue:
+    last: float = time()
+    throttle: float = 2e3
+
+    def __init__(self, callback, data):
+        self.data = data
+        self.callback = callback
+        queue.append(self)
+
+    async def run(self) -> None:
+        queue.pop(queue.index(self))
+        await self.callback(**self.data)
+
+    async def cycle() -> None:
+        if len(queue) and time() - Queue.last > Queue.throttle:
+            queue.pop().run()
+
+
+queue: list[Queue] = []
+
+
 class Socket:
     def __init__(self) -> None:
         self.current = None
@@ -45,6 +66,8 @@ class Socket:
                 try:
                     code = message[:3]
                     data = message[4:]
+
+                    await Queue.cycle()
                     if not self.initialized:
                         for c in CONFIG.joined_channels:
                             await websocket.send(cat(
@@ -115,9 +138,8 @@ class Response:
             args = ' '.join(exploded)
 
         extras = {
-            'args': args,
-            'sender': character,
-            'is_channel': False
+            'params': args,
+            'sender': character
         }
 
         print(extras)
@@ -149,6 +171,12 @@ class Output:
         self.send = self.__send_channel
 
     async def __send_private(self, *message) -> None:
+        if time() - Queue.last < Queue.throttle:
+            Queue(self.__send_private, message)
+            return
+
+        Queue.last = time()
+
         message: dict[str, str] = {
             'recipient': self.recipient,
             'message': cat(message)
@@ -157,7 +185,18 @@ class Output:
         await SOCKET.send(f'PRI {json.dumps(message)}')
 
     async def __send_channel(self, *message) -> None:
-        pass
+        if time() - Queue.last < Queue.throttle:
+            Queue(self.__send_channel, message)
+            return
+
+        Queue.last = time()
+
+        message: dict[str, str] = {
+            'channel': self.channel,
+            'message': cat(message)
+        }
+
+        await SOCKET.send(f'MSG {json.dumps(message)}')
 
     async def ping() -> None:
         await SOCKET.send(f'PIN')
