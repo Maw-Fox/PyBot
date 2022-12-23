@@ -8,4 +8,5 @@ A local F-Chat bot framework built with Python.
 
 ## Usage (Advanced):
 `python pybot.py --username me --password qwerty --skip`
+
 This command allows you to run the program without storing a creds.json file and skipping the passphrase query. Useful if you're a developer and developing a feature and want to quickly start the bot with one command.
