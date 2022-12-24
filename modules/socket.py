@@ -1,33 +1,32 @@
 import json
-from time import time
-from websockets.client import WebSocketClientProtocol
-from websockets.exceptions import ConnectionClosed
-from websockets.client import connect
+import requests
 
+from urllib import parse
+from time import time
+from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.channel import Channel, CHANNELS, remove_from_all_channels
 from modules.command import BOT_COMMANDS
 from modules.utils import cat
-from modules.constants import WS_URI
+from modules.constants import WS_URI, URL_CHARACTER
 
 
 class Queue:
     last: float = time()
-    throttle: float = 2
+    throttle: float = 2.0
 
-    def __init__(self, callback, data):
+    def __init__(self, callback, data) -> None:
         self.data = data
         self.callback = callback
         queue.append(self)
 
     async def run(self) -> None:
-        queue.pop(queue.index(self))
         await self.callback(self.data)
 
     async def cycle() -> None:
         if len(queue) and time() - Queue.last > Queue.throttle:
-            queue.pop().run()
+            await queue.pop().run()
 
 
 queue: list[Queue] = []
@@ -69,11 +68,15 @@ class Socket:
 
                     await Queue.cycle()
                     if not self.initialized:
-                        for c in CONFIG.joined_channels:
-                            await websocket.send(cat(
-                                'JCH ',
-                                f'{json.dumps({"channel": c})}'
-                            ))
+                        for channel in CONFIG.joined_channels:
+                            parameters = json.dumps({
+                                'channel': channel
+                            })
+
+                            await websocket.send(
+                                f'JCH {parameters}'
+                            )
+
                         self.initialized = True
                     if data:
                         data = json.loads(data)
@@ -99,14 +102,64 @@ class Response:
             setattr(CHANNELS, ch.channel, ch)
 
     async def ICH(data) -> None:
-        c = Channel(data['channel'])
-        CHANNELS[c.channel] = c
+        ch: Channel = Channel(data['channel'])
+        parameters: str = json.dumps(
+            {
+                'channel': ch.channel
+            }
+        )
+
+        CHANNELS[ch.channel] = ch
+
+        Queue(
+            SOCKET.current.send,
+            f'COL {parameters}'
+        )
 
         for user in data['users']:
-            c.add_user(user['identity'])
+            ch.add_user(user['identity'])
 
     async def JCH(data) -> None:
-        CHANNELS[data['channel']].add_user(data['character']['identity'])
+        character: str = data['character']['identity']
+        channel: str = data['channel']
+        response: requests.Response = requests.get(
+            f'{URL_CHARACTER}{parse.quote(character)}'
+        )
+        html: str = response.text
+
+        CHANNELS[data['channel']].add_user(character)
+
+        if '<span class="taglabel">Age' in html:
+            html = html[html.find('<span class="taglabel">Age</span>: '):]
+            html = html[:html.find('</span>')]
+            try:
+                age: int = int(html, base=10)
+                if age < 18 and age > 0:
+                    # make sure bot has op status, will throw exception
+                    # if the bot isn't an op.
+                    CHANNELS[channel].ops.index(CONFIG.bot_name)
+
+                    # underage profile detected, kick
+                    parameters = {
+                        'channel': channel,
+                        'character': character
+                    }
+                    Socket.send(f'CKU {json.dumps(parameters)}')
+            except ValueError:
+                return
+        else:
+            return
+
+    async def SYS(data) -> None:
+        print(data)
+        if data['message'] and 'Channel moderator' in data['message']:
+            channel: Channel = CHANNELS[data['channel']]
+            msg: str = data['message']
+            msg = msg[msg.find(': ') + 2:]
+            msg = msg.replace(' ', '')
+            op_list: list[str] = msg.split(',')
+            for op in op_list:
+                channel.add_op(op)
 
     async def FLN(data) -> None:
         remove_from_all_channels(data['character'])
@@ -141,8 +194,6 @@ class Response:
             'channel': ''
         }
 
-        print(extras)
-        print(BOT_COMMANDS.get(command))
         if not BOT_COMMANDS.get(command):
             return await output.send(
                 f'Unknown command "[b]{command}[/b]", type \'[i]!help[/i]\' ',
@@ -156,8 +207,10 @@ class Response:
         character: str = data['character']
         channel = data['channel']
         output = Output(channel=channel)
+
         if message[:1] != '!':
             return
+
         exploded: list[str] = message[1:].split(' ')
         command: str = exploded[0]
         args: str = ''

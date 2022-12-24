@@ -5,6 +5,7 @@ from modules.utils import cat
 
 AUTH_DURATION: int = 1800
 URL_DOMAIN: str = 'https://f-list.net'
+URL_CHARACTER: str = f'{URL_DOMAIN}/c/'
 URL_API_GET_TICKET: str = f'{URL_DOMAIN}/json/getApiTicket.php'
 WS_URI: str = 'wss://chat.f-list.net/chat2'
 PATH_CWD: str = os.getcwd()
@@ -41,3 +42,4 @@ PARSER.add_argument(
     help='Skip the setting of the passphrase.'
 )
 ARGS = PARSER.parse_args()
+GLOBAL_OPS: list[str] = []

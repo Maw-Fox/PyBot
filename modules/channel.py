@@ -6,6 +6,7 @@ class Channel:
         self.channel = name
         self.title = name
         self.users: list[str] = []
+        self.ops: list[str] = []
 
     def remove_user(self, user: str) -> None:
         try:
@@ -16,8 +17,11 @@ class Channel:
     def add_user(self, user: str) -> None:
         self.users.append(user)
 
-    def remove_channel(self, channel: str) -> None:
-        CHANNELS.pop(channel)
+    def add_op(self, user: str) -> None:
+        self.ops.append(user)
+
+    def remove_op(self, user: str) -> None:
+        self.ops.pop(self.ops.index(user))
 
 
 def remove_from_all_channels(user: str) -> None:

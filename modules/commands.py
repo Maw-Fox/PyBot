@@ -52,9 +52,9 @@ def propagate_commands() -> None:
     async def help(args) -> None:
         output = get_output(args)
         params: str = args['params']
+        out_str = '[b]List of available commands:[/b]\n'
 
         if not params:
-            out_str: str = '[b]List of available commands:[/b]\n'
             for cmd_name in BOT_COMMANDS:
                 command = BOT_COMMANDS[cmd_name]
                 out_str += f'[i]{command.command_name}[/i],'
@@ -66,7 +66,7 @@ def propagate_commands() -> None:
         subcommand: str = params[0]
 
         if not hasattr(BOT_COMMANDS, args.subcommand):
-            return await output.send
+            return await output.send(out_str)
 
         await output.send(
             BOT_COMMANDS[subcommand].help
