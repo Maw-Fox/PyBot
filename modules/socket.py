@@ -2,7 +2,6 @@ import json
 import requests
 import re
 
-from urllib.parse import quote
 from time import time
 from websockets.client import connect
 from modules.config import CONFIG
@@ -10,7 +9,7 @@ from modules.auth import AUTH
 from modules.command import BotCommand, BOT_COMMANDS, BOT_STATES
 from modules.channel import Channel, CHANNELS, remove_from_all_channels
 from modules.utils import cat
-from modules.constants import WS_URI, URL_PROFILE_API, URL_CHARACTER
+from modules.constants import WS_URI
 
 
 class Queue:
@@ -40,7 +39,7 @@ class Socket:
 
     async def read(self, code, data) -> None:
         if hasattr(Response, code):
-            print(f'[{int(time())}]: ', code, data)
+            # print(f'[{int(time())}]: ', code, data)
             await getattr(Response, code)(data)
 
     async def send(self, code: str, message: str = '') -> None:
@@ -161,22 +160,24 @@ class Response:
             'channel': channel,
             'character': character
         }
-        print(parameters)
+
 #        print(CHANNELS[channel].ops)
 #        try:
 #            CHANNELS[channel].ops.index(CONFIG.bot_name)
 #        except ValueError as err:
 #            print(err)
 #            return
-        print(age, vis)
+        # print(age, vis)
         if age_valid:
             age = int(age, base=10)
             if age > 0 and age < 18:
+                print(f'DEBUG: Kicked {character}, age:{age}, visual:{vis}')
                 return await SOCKET.send('CKU', parameters)
 
         if vis_valid:
             vis = int(vis, base=10)
             if vis > 0 and vis < 18:
+                print(f'DEBUG: Kicked {character}, age:{age}, visual:{vis}')
                 return await SOCKET.send('CKU', parameters)
 
     async def SYS(data) -> None:
@@ -207,7 +208,11 @@ class Response:
 
         if message[:1] != '!':
             return await output.send(
-                'I am a [b]bot[/b] and not a real person.'
+                cat(
+                    'I am a [b]bot[/b] and not a real person.\n\n'
+                    'If you were kicked from Anal Addicts, by this bot, ',
+                    'I would suggest not joining on this character again!'
+                )
             )
 
         exploded: list[str] = message[1:].split(' ')
@@ -256,7 +261,7 @@ class Response:
             'channel': channel
         }
 
-        print(extras)
+#        print(extras)
 
         try:
             channel_inst.ops.index(character)
