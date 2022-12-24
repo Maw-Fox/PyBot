@@ -8,7 +8,7 @@ class BotCommand():
         self.command_name = command_name
         self.solver = solver
         self.help = help
-        BOT_COMMANDS[command_name] = self
 
 
 BOT_COMMANDS: dict[str, BotCommand] = {}
+BOT_STATES: dict[str, dict] = {}

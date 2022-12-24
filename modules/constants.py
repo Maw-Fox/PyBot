@@ -1,10 +1,9 @@
 import os
 import argparse
 
-from modules.utils import cat
-
 AUTH_DURATION: int = 1800
 URL_DOMAIN: str = 'https://f-list.net'
+URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
 URL_CHARACTER: str = f'{URL_DOMAIN}/c/'
 URL_API_GET_TICKET: str = f'{URL_DOMAIN}/json/getApiTicket.php'
 WS_URI: str = 'wss://chat.f-list.net/chat2'

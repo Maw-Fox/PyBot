@@ -1,15 +1,16 @@
 import json
 import requests
+import re
 
-from urllib import parse
+from urllib.parse import quote
 from time import time
 from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
+from modules.command import BotCommand, BOT_COMMANDS, BOT_STATES
 from modules.channel import Channel, CHANNELS, remove_from_all_channels
-from modules.command import BOT_COMMANDS
 from modules.utils import cat
-from modules.constants import WS_URI, URL_CHARACTER
+from modules.constants import WS_URI, URL_PROFILE_API, URL_CHARACTER
 
 
 class Queue:
@@ -98,18 +99,22 @@ class Response:
 
     async def ORS(data) -> None:
         for i in data['channels']:
-            ch = Channel(**data['channels'][i])
-            setattr(CHANNELS, ch.channel, ch)
+            channel_inst = Channel(**data['channels'][i])
+            CHANNELS[channel_inst.channel] = channel_inst
 
     async def ICH(data) -> None:
-        ch: Channel = Channel(data['channel'])
+        if hasattr(CHANNELS, data['channel']):
+            channel_inst: Channel = CHANNELS[data['channel']]
+        else:
+            channel_inst: Channel = Channel(data['channel'])
+            CHANNELS[data['channel']] = channel_inst
+        channel: str = channel_inst.channel
+
         parameters: str = json.dumps(
             {
-                'channel': ch.channel
+                'channel': channel
             }
         )
-
-        CHANNELS[ch.channel] = ch
 
         Queue(
             SOCKET.current.send,
@@ -117,49 +122,74 @@ class Response:
         )
 
         for user in data['users']:
-            ch.add_user(user['identity'])
+            channel_inst.add_user(user['identity'])
 
     async def JCH(data) -> None:
         character: str = data['character']['identity']
         channel: str = data['channel']
-        response: requests.Response = requests.get(
-            f'{URL_CHARACTER}{parse.quote(character)}'
-        )
-        html: str = response.text
 
-        CHANNELS[data['channel']].add_user(character)
+        params = {
+            'account': CONFIG.account_name,
+            'ticket': AUTH.auth_key,
+            'name': character,
+        }
 
-        if '<span class="taglabel">Age' in html:
-            html = html[html.find('<span class="taglabel">Age</span>: '):]
-            html = html[:html.find('</span>')]
-            try:
-                age: int = int(html, base=10)
-                if age < 18 and age > 0:
-                    # make sure bot has op status, will throw exception
-                    # if the bot isn't an op.
-                    CHANNELS[channel].ops.index(CONFIG.bot_name)
-
-                    # underage profile detected, kick
-                    parameters = {
-                        'channel': channel,
-                        'character': character
-                    }
-                    Socket.send(f'CKU {json.dumps(parameters)}')
-            except ValueError:
-                return
+        if hasattr(CHANNELS, channel):
+            channel_inst: Channel = CHANNELS[channel]
         else:
+            channel_inst: Channel = Channel(channel)
+            CHANNELS[channel] = channel_inst
+
+        channel_inst.add_user(character)
+
+        if not BOT_STATES['yeetus'][channel]:
             return
+
+        response = requests.post(
+            'https://www.f-list.net/json/api/character-data.php',
+            data=params
+        )
+        response = json.loads(response.text)
+
+        vis: str = response['infotags'].get('64')
+        age: str = response['infotags'].get('1')
+
+        age_valid: re.Match = re.match('^[0-9]+$', age)
+        vis_valid: re.Match = re.match('^[0-9]+$', vis)
+
+        parameters: dict[str, str] = {
+            'channel': channel,
+            'character': character
+        }
+        print(parameters)
+#        print(CHANNELS[channel].ops)
+#        try:
+#            CHANNELS[channel].ops.index(CONFIG.bot_name)
+#        except ValueError as err:
+#            print(err)
+#            return
+        print(age, vis)
+        if age_valid:
+            age = int(age, base=10)
+            if age > 0 and age < 18:
+                return await SOCKET.send('CKU', parameters)
+
+        if vis_valid:
+            vis = int(vis, base=10)
+            if vis > 0 and vis < 18:
+                return await SOCKET.send('CKU', parameters)
 
     async def SYS(data) -> None:
         print(data)
         if data['message'] and 'Channel moderator' in data['message']:
-            channel: Channel = CHANNELS[data['channel']]
+            channel_inst: Channel = CHANNELS[data['channel']]
             msg: str = data['message']
             msg = msg[msg.find(': ') + 2:]
             msg = msg.replace(' ', '')
             op_list: list[str] = msg.split(',')
+
             for op in op_list:
-                channel.add_op(op)
+                CHANNELS[channel_inst.channel].ops.append(op)
 
     async def FLN(data) -> None:
         remove_from_all_channels(data['character'])
@@ -194,18 +224,19 @@ class Response:
             'channel': ''
         }
 
-        if not BOT_COMMANDS.get(command):
+        if not BOT_COMMANDS[command]:
             return await output.send(
                 f'Unknown command "[b]{command}[/b]", type \'[i]!help[/i]\' ',
                 'for a list of commands.'
             )
 
-        await BOT_COMMANDS.get(command).solver(extras)
+        await BOT_COMMANDS[command].solver(extras)
 
     async def MSG(data) -> None:
         message: str = data['message']
         character: str = data['character']
         channel = data['channel']
+        channel_inst: Channel = CHANNELS[channel]
         output = Output(channel=channel)
 
         if message[:1] != '!':
@@ -227,13 +258,20 @@ class Response:
 
         print(extras)
 
-        if not BOT_COMMANDS.get(command):
-            return await output.send(
-                f'Unknown command "[b]{command}[/b]", type \'[i]!help[/i]\' ',
-                'for a list of commands.'
-            )
+        try:
+            channel_inst.ops.index(character)
+        except ValueError:
+            return
+        print(command)
 
-        await BOT_COMMANDS.get(command).solver(extras)
+        if not BOT_COMMANDS[command]:
+            return
+#            return await output.send(
+#                f'Unknown command "[b]{command}[/b]".'
+#                # ', type \'[i]!help[/i]\' for a list of commands.'
+#            )
+
+        await BOT_COMMANDS[command].solver(extras)
 
 
 class Output:
@@ -284,6 +322,119 @@ class Output:
 
     async def ping() -> None:
         await SOCKET.send(f'PIN')
+
+
+def propagate_commands() -> None:
+    async def yeetus(args) -> None:
+        channel: str = args['channel']
+        by: str = args['from']
+
+        if not channel:
+            return
+
+        output = Output(channel=channel)
+
+        channel_inst: Channel = CHANNELS[channel]
+        try:
+            channel_inst.ops.index(by)
+        except ValueError:
+            return
+
+        if not BOT_STATES['yeetus'][channel]:
+            BOT_STATES['yeetus'][channel] = False
+
+        NEW_STATE: bool = not BOT_STATES['yeetus'][channel]
+        BOT_STATES['yeetus'][channel] = NEW_STATE
+
+        if NEW_STATE:
+            await output.send(
+                f'You got it, [b]{by}[/b]!',
+                ' Yeet mode [i]engaged[/i].'
+            )
+        else:
+            await output.send(
+                f'You got it, [b]{by}[/b]!',
+                ' Yeet mode [i]disengaged[/i].'
+            )
+
+    cmd = BotCommand(
+        'yeetus',
+        yeetus,
+        'Gotta protect the kids from themselves. :>~'
+    )
+    BOT_COMMANDS['yeetus'] = cmd
+    BOT_STATES['yeetus'] = {}
+
+    for channel in CONFIG.joined_channels:
+        BOT_STATES['yeetus'][channel] = False
+
+    """
+    async def help(args) -> None:
+        output = get_output(args)
+        params: str = args['params']
+        out_str = '[b]List of available commands:[/b]\n'
+
+        if not params:
+            for cmd_name in BOT_COMMANDS:
+                command = BOT_COMMANDS[cmd_name]
+                out_str += f'[i]{command.command_name}[/i],'
+
+            out_str = out_str[:len(out_str) - 1]
+            return await output.send(out_str)
+
+        params: list[str] = get_params(params, 1)
+        subcommand: str = params[0]
+
+        if not hasattr(BOT_COMMANDS, args.subcommand):
+            return await output.send(out_str)
+
+        await output.send(
+            BOT_COMMANDS[subcommand].help
+        )
+
+    BotCommand(
+        'help',
+        help,
+        cat(
+            'Insert witty joke about recursion here, or the fact I can no ',
+            'longer actually help you if you need help about the help ',
+            'function itself. :>~'
+        )
+    )
+
+    async def die(args) -> None:
+        output = get_output(args)
+        by: str = args['from']
+        print('ding')
+        if by != 'Kali':
+            return await output.send(
+                'No u. :>~\n[color=red][b]A C C E S S   D E N I E D',
+                '[/b][/color]'
+            )
+
+        await output.send(
+            '/me dies. [sub]X>~[/sub]'
+        )
+        system.exit(1)
+
+    BotCommand(
+        'die',
+        die,
+        'Kill the bot. Before you event try: [b]no[/b], you can\'t. :>~'
+    )
+
+    async def hp(args) -> None:
+        output = get_output(args)
+
+    BotCommand(
+        'hp',
+        hp,
+        'HP bar formatter.'
+    )
+    """
+
+
+propagate_commands()
 
 
 SOCKET: Socket = Socket()

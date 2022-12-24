@@ -30,6 +30,7 @@ class Auth:
                 if not hasattr(response_parsed, 'error'):
                     self.auth_key = response_parsed['ticket']
                     self.__valid_until = int(time()) + AUTH_DURATION
+                    print(self.auth_key)
             except KeyError:
                 print('Invalid credentials?')
                 exit(0)
