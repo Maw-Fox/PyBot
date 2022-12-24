@@ -1,7 +1,7 @@
 import os
 import argparse
 
-AUTH_DURATION: int = 1800
+AUTH_DURATION: int = 60 * 12
 URL_DOMAIN: str = 'https://f-list.net'
 URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
 URL_CHARACTER: str = f'{URL_DOMAIN}/c/'

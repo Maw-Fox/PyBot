@@ -39,7 +39,8 @@ class Socket:
 
     async def read(self, code, data) -> None:
         if hasattr(Response, code):
-            # print(f'[{int(time())}]: ', code, data)
+            if code != 'FLN':
+                print(f'[{int(time())}]:INBOUND<< ', code, data)
             await getattr(Response, code)(data)
 
     async def send(self, code: str, message: str = '') -> None:
@@ -86,7 +87,7 @@ class Socket:
                         AUTH.check_ticket()
                     await self.read(code, data)
                 except Exception as error:
-                    print(str(error))
+                    print(f'[{int(time())}]:WEB/ERR<< {str(error)}')
 
     async def close(self) -> None:
         await self.current.close()
@@ -94,7 +95,7 @@ class Socket:
 
 class Response:
     async def ERR(data) -> None:
-        print(f'ERR: {json.dumps(data)}')
+        print(f'[{int(time())}]:ERR/ANY<< {json.dumps(data)}')
 
     async def ORS(data) -> None:
         for i in data['channels']:
@@ -142,26 +143,30 @@ class Response:
         channel_inst.add_user(character)
 
         if not BOT_STATES['yeetus'][channel]:
-            return
+            print(f'[{int(time())}]:JCH/SKP<<: COND SKIPPED')
 
         response = requests.post(
             'https://www.f-list.net/json/api/character-data.php',
             data=params
         )
         response = json.loads(response.text)
-
+        print(f'[{int(time())}]:JCH/DBG<< ', json.dumps(response['infotags']))
         vis: str = response['infotags'].get('64')
         age: str = response['infotags'].get('1')
+        vis_valid: bool = False
+        age_valid: bool = False
 
-        age_valid: re.Match = re.match('^[0-9]+$', age)
-        vis_valid: re.Match = re.match('^[0-9]+$', vis)
+        if age:
+            age_valid = bool(re.match('^[0-9]+$', age))
+        if vis:
+            vis_valid = bool(re.match('^[0-9]+$', vis))
 
         parameters: dict[str, str] = {
             'channel': channel,
             'character': character
         }
 
-#        print(CHANNELS[channel].ops)
+        # print(f'[{int(time())}]:JCH/DBG<< OPS:', CHANNELS[channel].ops)
 #        try:
 #            CHANNELS[channel].ops.index(CONFIG.bot_name)
 #        except ValueError as err:
@@ -170,18 +175,18 @@ class Response:
         # print(age, vis)
         if age_valid:
             age = int(age, base=10)
-            if age > 0 and age < 18:
-                print(f'DEBUG: Kicked {character}, age:{age}, visual:{vis}')
+            if age > 5 and age < 18:
+                print(f'[{int(time())}]:JCH/DBG>> Kicked {character}, age:{age}, visual:{vis}')
                 return await SOCKET.send('CKU', parameters)
 
         if vis_valid:
             vis = int(vis, base=10)
-            if vis > 0 and vis < 18:
-                print(f'DEBUG: Kicked {character}, age:{age}, visual:{vis}')
+            if vis > 5 and vis < 18:
+                print(f'[{int(time())}]:JCH/DBG>> Kicked {character}, age:{age}, visual:{vis}')
                 return await SOCKET.send('CKU', parameters)
 
     async def SYS(data) -> None:
-        print(data)
+        print(f'[{int(time())}]:SYS/DAT<<', data)
         if data['message'] and 'Channel moderator' in data['message']:
             channel_inst: Channel = CHANNELS[data['channel']]
             msg: str = data['message']
@@ -243,6 +248,19 @@ class Response:
         channel = data['channel']
         channel_inst: Channel = CHANNELS[channel]
         output = Output(channel=channel)
+        # temporary
+        ops: list[str] = [
+            'Awkward',
+            'Lex',
+            'Fenker',
+            'Randal Tassler',
+            'Awkward',
+            'Vorst',
+            'Ajadea',
+            'Anal',
+            'Natascha Tsukanova',
+            'Kali'
+        ]
 
         if message[:1] != '!':
             return
@@ -261,13 +279,13 @@ class Response:
             'channel': channel
         }
 
-#        print(extras)
+        # print(f'[{int(time())}]:MSG/DBG<< ARGS:', extras)
 
         try:
-            channel_inst.ops.index(character)
+            ops.index(character)
         except ValueError:
             return
-        print(command)
+        # print(f'[{int(time())}]:MSG/DBG<< CMD:', command)
 
         if not BOT_COMMANDS[command]:
             return
@@ -297,7 +315,7 @@ class Output:
         self.send = self.__send_channel
 
     async def __send_private(self, *message) -> None:
-        print(time() - Queue.last, Queue.throttle)
+        print(f'[{int(time())}]:SEN/PRI>> TS:', time() - Queue.last, Queue.throttle)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_private, message)
             return
@@ -312,6 +330,7 @@ class Output:
         await SOCKET.send(f'PRI {json.dumps(message)}')
 
     async def __send_channel(self, *message) -> None:
+        print(f'[{int(time())}]:SEN/CHA>> TS:', time() - Queue.last, Queue.throttle)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_channel, message)
             return
@@ -333,15 +352,27 @@ def propagate_commands() -> None:
     async def yeetus(args) -> None:
         channel: str = args['channel']
         by: str = args['from']
+        # temporary
+        ops: list[str] = [
+            'Awkward',
+            'Lex',
+            'Fenker',
+            'Randal Tassler',
+            'Awkward',
+            'Vorst',
+            'Ajadea',
+            'Anal',
+            'Natascha Tsukanova',
+            'Kali'
+        ]
 
         if not channel:
             return
 
         output = Output(channel=channel)
 
-        channel_inst: Channel = CHANNELS[channel]
         try:
-            channel_inst.ops.index(by)
+            ops.index(by)
         except ValueError:
             return
 
