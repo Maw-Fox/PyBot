@@ -17,13 +17,13 @@ class Config:
         bot_name: str,
         joined_channels: list[str]
     ) -> None:
-        self.account_name = username
-        self.account_password = password
-        self.client_name = client_name
-        self.client_version = client_version
-        self.retry_interval = retry_interval
-        self.bot_name = bot_name
-        self.joined_channels = joined_channels
+        self.account_name: str = username
+        self.account_password: str = password
+        self.client_name: str = client_name
+        self.client_version: str = client_version
+        self.retry_interval: int = retry_interval
+        self.bot_name: str = bot_name
+        self.joined_channels: list[str] = joined_channels
 
 
 def do_crypt(passphrase: str, password: str, forward: bool = True) -> bytes:

@@ -1,15 +1,14 @@
 import asyncio
 import json
 import requests
-import re
 import os
 
 from time import time
 from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
-from modules.user import User, GLOBAL_USER_LIST
-from modules.utils import cat, log, age_tester
+from modules.character import Character, GLOBAL_CHARACTER_LIST
+from modules.utils import cat, log, age_tester, get_char
 
 BOT_STATES: dict[str, dict] = {}
 URL_DOMAIN: str = 'https://www.f-list.net'
@@ -17,7 +16,7 @@ URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
 WS_URI: str = 'wss://chat.f-list.net/chat2'
 PATH_CWD: str = os.getcwd()
 
-GLOBAL_OPS: list[str] = []
+GLOBAL_OPS: list[Character] = []
 
 
 class Channel:
@@ -25,24 +24,25 @@ class Channel:
         self,
         name: str
     ) -> None:
-        self.channel = name
+        self.name = name
         self.title = name
-        self.users: dict[str, bool] = {}
-        self.ops: dict[str, bool] = {}
+        self.characters: dict[str, Character] = {}
+        self.ops: dict[str, Character] = {}
+        CHANNELS[self.name] = self
 
-    def remove_user(self, user: str) -> None:
-        if not self.users.get(user):
+    def remove_char(self, character: Character) -> None:
+        if not self.characters.get(character):
             return
-        self.users.pop(user)
+        self.characters.pop(character)
 
-    def add_user(self, user: str) -> None:
-        self.users[user] = True
+    def add_char(self, character: Character) -> None:
+        self.characters[character]: Character = character
 
-    def add_op(self, user: str) -> None:
-        self.ops[user] = True
+    def add_op(self, character: Character) -> None:
+        self.ops[character] = character
 
-    def remove_op(self, user: str) -> None:
-        self.ops.pop(user)
+    def remove_op(self, character: Character) -> None:
+        self.ops.pop(character)
 
 
 CHANNELS: dict[str, Channel] = {}
@@ -71,11 +71,11 @@ QUEUE: list[Queue] = []
 class Socket:
     def __init__(self) -> None:
         self.current = None
-        self.initialized = False
+        self.initialized: bool = False
 
     async def read(self, code, data) -> None:
         if hasattr(Response, code):
-            if code != 'FLN':
+            if code != 'FLN' and code != 'LIS' and code != 'NLN':
                 log('INBOUND', code, data)
             await getattr(Response, code)(data)
 
@@ -109,7 +109,7 @@ class Socket:
                             parameters = json.dumps({
                                 'channel': channel
                             })
-
+                            Channel(channel)
                             await websocket.send(
                                 f'JCH {parameters}'
                             )
@@ -133,36 +133,43 @@ class Response:
 
     async def ORS(data) -> None:
         for i in data['channels']:
-            channel_data: dict = data['channels'][i]
-            CHANNELS[channel_data['name']] = Channel(**channel_data)
+            c_data: dict = data['channels'][i]
+            if not get_chan(data['channels'][i].name):
+                Channel(**c_data)
+
+    async def LIS(data) -> None:
+        # data array -> name, gender, status, status msg
+        for c_data in data['characters']:
+            Character(
+                c_data[0],
+                c_data[1].lower(),
+                c_data[2],
+                c_data[3]
+            )
 
     async def ICH(data) -> None:
-        channel: str = data['channel']
+        chan: Channel = get_chan(data['channel'])
 
-        if not CHANNELS.get(channel):
-            CHANNELS[data['channel']] = Channel(data['channel'])
+        for c_data in data['users']:
+            chan.add_char(get_char(c_data['identity']))
 
-        channel_inst: Channel = CHANNELS[data['channel']]
-
-        Queue(
-            SOCKET.current.send,
-            f'COL ' + json.dumps({'channel': channel})
-        )
-
-        for user in data['users']:
-            channel_inst.add_user(user['identity'])
+    async def COL(data) -> None:
+        chan: Channel = get_chan(data['channel'])
+        for char_str in data['oplist']:
+            if not char_str:
+                continue
+            chan.add_op(get_char(char_str))
 
     async def JCH(data) -> None:
-        character: str = data['character']['identity']
-        channel: str = data['channel']
+        char: Character = get_char(data['character']['identity'])
+        chan: Channel = get_chan(data['channel'])
 
-        if not CHANNELS.get(channel):
-            CHANNELS[channel] = Channel(channel)
+        if not chan:
+            chan: Channel = Channel(data['channel'])
 
-        channel_inst: Channel = CHANNELS[channel]
-        channel_inst.add_user(character)
+        chan.add_char(char)
 
-        if not BOT_STATES['yeetus'].get(channel):
+        if not BOT_STATES['yeetus'].get(chan.name) and False:
             return
 
         response = requests.post(
@@ -170,7 +177,7 @@ class Response:
             data={
                 'account': CONFIG.account_name,
                 'ticket': AUTH.auth_key,
-                'name': character,
+                'name': char.name,
             }
         )
 
@@ -190,40 +197,39 @@ class Response:
             age = f'[{age}]' if bad_age else age
             vis = f'[{vis}]' if bad_vis else vis
 
-            log('JCH/DBG', f'Kick {character}, age:{age}, visual:{vis}', io=0)
+            log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
             return await SOCKET.send(
                 'CKU',
                 {
-                    'channel': channel,
-                    'character': character
+                    'channel': chan.name,
+                    'character': char.name
                 }
             )
 
     async def SYS(data) -> None:
         log('SYS/DAT', data)
-        if data['message'] and 'Channel moderator' in data['message']:
-            channel_inst: Channel = CHANNELS[data['channel']]
-            msg: str = data['message']
-            msg = msg[msg.find(': ') + 2:]
-            msg = msg.replace(' ', '')
-            op_list: list[str] = msg.split(',')
-
-            for op in op_list:
-                channel_inst.ops[op] = True
 
     async def FLN(data) -> None:
-        remove_from_all_channels(data['character'])
+        remove_from_all_channels(get_char(data['character']))
+
+    async def NLN(data) -> None:
+        Character(
+            data['identity'],
+            data['gender'],
+            data['status']
+        )
 
     async def LCH(data) -> None:
-        CHANNELS[data['channel']].remove_user(data['character'])
+        char: Character = get_char(data['character'])
+        get_chan(data['channel']).remove_char(char)
 
     async def PIN(data) -> None:
         await Output.ping()
 
     async def PRI(data) -> None:
         message: str = data['message']
-        character: str = data['character']
-        output = Output(recipient=character)
+        char: Character = get_char(data['character'])
+        output: Output = Output(recipient=char)
 
         if message[:1] != '!':
             return await output.send(
@@ -244,7 +250,7 @@ class Response:
 
         extras = {
             'params': args,
-            'from': character,
+            'from': char.name,
             'channel': ''
         }
 
@@ -254,13 +260,12 @@ class Response:
                 'for a list of commands.'
             )
 
-        await BOT_COMMANDS[command].solver(extras)
+        await BOT_COMMANDS.get(command).solver(extras)
 
     async def MSG(data) -> None:
         message: str = data['message']
-        character: str = data['character']
-        channel = data['channel']
-        channel_inst: Channel = CHANNELS[channel]
+        char: Character = get_char(data['character'])
+        chan: Channel = get_chan(data['channel'])
 
         if message[:1] != '!':
             return
@@ -275,17 +280,17 @@ class Response:
 
         extras = {
             'params': args,
-            'from': character,
-            'channel': channel
+            'from': char.name,
+            'channel': chan.name
         }
 
-        if not channel_inst.ops.get(character):
+        if not chan.ops.get(char):
             return
 
         if not BOT_COMMANDS.get(command):
             return
 
-        await BOT_COMMANDS[command].solver(extras)
+        await BOT_COMMANDS.get(command).solver(extras)
 
 
 SOCKET: Socket = Socket()
@@ -298,9 +303,9 @@ class BotCommand():
         solver,
         help: str
     ) -> None:
-        self.command_name = command_name
+        self.command_name: str = command_name
         self.solver = solver
-        self.help = help
+        self.help: str = help
 
 
 BOT_COMMANDS: dict[str, BotCommand] = {}
@@ -310,12 +315,12 @@ class Output:
     def __init__(
         self,
         message: str = '',
-        recipient: str = None,
-        channel: str = None,
+        recipient: Character | None = None,
+        channel: Channel | None = None,
     ) -> None:
-        self.message = message
-        self.channel = channel
-        self.recipient = recipient
+        self.message: str = message
+        self.channel: Channel | None = channel
+        self.recipient: Character | None = recipient
 
         if recipient:
             self.send = self.__send_private
@@ -332,7 +337,7 @@ class Output:
         Queue.last = time()
 
         message: dict[str, str] = {
-            'recipient': self.recipient,
+            'recipient': self.recipient.name,
             'message': cat(*message)
         }
 
@@ -347,7 +352,7 @@ class Output:
         Queue.last = time()
 
         message: dict[str, str] = {
-            'channel': self.channel,
+            'channel': self.channel.name,
             'message': cat(*message)
         }
 
@@ -357,41 +362,45 @@ class Output:
         await SOCKET.send(f'PIN')
 
 
-def remove_from_all_channels(user: str) -> None:
-    for c_name in CHANNELS:
-        CHANNELS[c_name].remove_user(user)
+def remove_from_all_channels(character: Character) -> None:
+    GLOBAL_CHARACTER_LIST.pop(character.name)
+    for channel in CHANNELS:
+        get_chan(channel).remove_char(character)
+
+
+def get_chan(channel: str) -> Channel | None:
+    return CHANNELS.get(channel)
 
 
 def propagate_commands() -> None:
     async def yeetus(args) -> None:
-        channel: str = args['channel']
-        channel_inst: Channel = CHANNELS[channel]
-        by: str = args['from']
+        chan: Channel = get_chan(args['channel'])
+        char: Character = get_char(args['from'])
 
-        if not channel:
+        if not chan:
             return
 
-        output = Output(channel=channel)
+        output: Output = Output(channel=chan)
 
         if not (
-            channel_inst.ops.get(by) and channel_inst.ops.get(CONFIG.bot_name)
+            chan.ops.get(char) and chan.ops.get(CONFIG.bot_name)
         ):
             return
 
-        if not BOT_STATES['yeetus'].get(channel):
-            BOT_STATES['yeetus'][channel] = False
+        if not BOT_STATES['yeetus'].get(chan.name):
+            BOT_STATES['yeetus'][chan.name] = False
 
-        NEW_STATE: bool = not BOT_STATES['yeetus'][channel]
-        BOT_STATES['yeetus'][channel] = NEW_STATE
+        NEW_STATE: bool = not BOT_STATES['yeetus'][chan.name]
+        BOT_STATES['yeetus'][chan.name] = NEW_STATE
 
         if NEW_STATE:
             await output.send(
-                f'You got it, [b]{by}[/b]!',
+                f'You got it, [b]{char.name}[/b]!',
                 ' Yeet mode [i]engaged[/i].'
             )
         else:
             await output.send(
-                f'You got it, [b]{by}[/b]!',
+                f'You got it, [b]{char.name}[/b]!',
                 ' Yeet mode [i]disengaged[/i].'
             )
 
@@ -400,11 +409,12 @@ def propagate_commands() -> None:
         yeetus,
         'Gotta protect the kids from themselves. :>~'
     )
+
     BOT_COMMANDS['yeetus'] = cmd
     BOT_STATES['yeetus'] = {}
 
-    for channel in CONFIG.joined_channels:
-        BOT_STATES['yeetus'][channel] = False
+    for chan_str in CONFIG.joined_channels:
+        BOT_STATES['yeetus'][chan_str] = False
 
     """
     async def help(args) -> None:

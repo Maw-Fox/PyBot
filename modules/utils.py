@@ -2,6 +2,7 @@ import re
 
 from time import time
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS
+from modules.character import Character, GLOBAL_CHARACTER_LIST
 
 
 def cat(*args: str) -> str:
@@ -64,3 +65,7 @@ def age_tester(test_me: str) -> bool:
             if age < 18 and age > 5:
                 return True
     return False
+
+
+def get_char(character: str) -> Character | None:
+    return GLOBAL_CHARACTER_LIST.get(character, None)
