@@ -33,7 +33,7 @@ def jank_to_ascii(sanitize_me: str) -> str:
         to_sub: str = JANK_TO_ASCII_TABLE[to_rep]
         buffer = re.sub(f'[{to_sub}]', to_rep, buffer)
     # clean out the non-ascii characters, except space and dash
-    buffer = re.sub('[^a-z0-9 -]', '', buffer)
+    buffer = re.sub('[^a-z0-9 \\-\\/]', '', buffer)
     return buffer
 
 
@@ -57,8 +57,7 @@ def age_tester(test_me: str) -> bool:
     if is_written_taboo(buffer):
         return True
     # clear all non-char/non-number characters, except dash (for range comp)
-    buffer = re.sub('[^a-z0-9\\-]', '', buffer)
-    exploded: list[str] = buffer.split('-')
+    exploded: list[str] = re.split('[/ -]', buffer)
     for part in exploded:
         if re.match('^[0-9]+$', part):
             age: int = int(part, base=10)

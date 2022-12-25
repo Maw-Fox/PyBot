@@ -34,7 +34,7 @@
     },
     {
       "test": "--1. 2.-- ",
-      "expects": true
+      "expects": false
     },
     {
       "test": "\ud835\uddab\ud835\uddba\ud835\uddcd\ud835\uddbe \ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7\ud835\uddba\ud835\uddc0\ud835\uddbe \ud835\uddd2\ud835\uddbe\ud835\uddba\ud835\uddcb\ud835\uddcc! (\ud835\udda4\ud835\uddc2\ud835\uddc0\ud835\uddc1\ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7 \u2013 \ud835\uddad\ud835\uddc2\ud835\uddc7\ud835\uddbe\ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7) ",
@@ -42,6 +42,22 @@
     },
     {
       "test": "when /hasn't/ he gotten carded",
+      "expects": false
+    },
+    {
+      "test": "NOT 11",
+      "expects": true
+    },
+    {
+      "test": "16-32",
+      "expects": true
+    },
+    {
+      "test": "17/32",
+      "expects": true
+    },
+    {
+      "test": "18/32",
       "expects": false
     }
   ]

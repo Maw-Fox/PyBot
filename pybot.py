@@ -162,18 +162,8 @@ class Response:
         channel_inst: Channel = CHANNELS[channel]
         channel_inst.add_user(character)
 
-        # if not BOT_STATES['yeetus'].get(channel):
-        #    return
-        # '0.0.0.0:80' http/https
-        # Mozilla/5.0 (Windows NT 10.0; Win64; x64;
-        # rv:106.0) Gecko/20100101 Firefox/106.0
-        headers = {
-            'User-Agent': cat(
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; ',
-                'rv:106.0) Gecko/20100101 Firefox/106.0'
-            ),
-            'Referrer': 'https://chat.f-list.net'
-        }
+        if not BOT_STATES['yeetus'].get(channel):
+            return
 
         response = requests.post(
             'https://www.f-list.net/json/api/character-data.php',
@@ -181,38 +171,33 @@ class Response:
                 'account': CONFIG.account_name,
                 'ticket': AUTH.auth_key,
                 'name': character,
-            },
-            headers={
-                'User-Agent': cat(
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; ',
-                    'rv:106.0) Gecko/20100101 Firefox/106.0'
-                ),
-                'Referrer': 'https://chat.f-list.net'
-            },
-            proxies={
-                'http': '0.0.0.0:80',
-                'https': '0.0.0.0:80'
             }
         )
+
         response = json.loads(response.text)
-        log('JCH/DBG', response)
+
+        if not response.get('infotags'):
+            return log('JCH/DBG', response)
+
         vis: str = response['infotags'].get('64', '')
         age: str = response['infotags'].get('1', '')
         bad_age: bool = age_tester(age)
         bad_vis: bool = age_tester(vis)
+
+        log('JCH/DBG', vis, age)
 
         if bad_age or bad_vis:
             age = f'[{age}]' if bad_age else age
             vis = f'[{vis}]' if bad_vis else vis
 
             log('JCH/DBG', f'Kick {character}, age:{age}, visual:{vis}', io=0)
-#            return await SOCKET.send(
-#                'CKU',
-#                {
-#                    'channel': channel,
-#                    'character': character
-#                }
-#            )
+            return await SOCKET.send(
+                'CKU',
+                {
+                    'channel': channel,
+                    'character': character
+                }
+            )
 
     async def SYS(data) -> None:
         log('SYS/DAT', data)
