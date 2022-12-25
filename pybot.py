@@ -9,8 +9,7 @@ from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.user import User, GLOBAL_USER_LIST
-from modules.utils import cat, log
-from modules.shared import JANK_TO_ASCII_TABLE, WRITTEN_AGES
+from modules.utils import cat, log, age_tester
 
 BOT_STATES: dict[str, dict] = {}
 URL_DOMAIN: str = 'https://www.f-list.net'
@@ -119,8 +118,6 @@ class Socket:
                     if data:
                         data = json.loads(data)
                     else:
-                        # Check ticket timer with every PIN
-                        # +GC
                         AUTH.check_ticket()
                     await self.read(code, data)
                 except Exception as error:
@@ -165,8 +162,18 @@ class Response:
         channel_inst: Channel = CHANNELS[channel]
         channel_inst.add_user(character)
 
-        if not BOT_STATES['yeetus'].get(channel):
-            return
+        # if not BOT_STATES['yeetus'].get(channel):
+        #    return
+        # '0.0.0.0:80' http/https
+        # Mozilla/5.0 (Windows NT 10.0; Win64; x64;
+        # rv:106.0) Gecko/20100101 Firefox/106.0
+        headers = {
+            'User-Agent': cat(
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; ',
+                'rv:106.0) Gecko/20100101 Firefox/106.0'
+            ),
+            'Referrer': 'https://chat.f-list.net'
+        }
 
         response = requests.post(
             'https://www.f-list.net/json/api/character-data.php',
@@ -174,22 +181,38 @@ class Response:
                 'account': CONFIG.account_name,
                 'ticket': AUTH.auth_key,
                 'name': character,
+            },
+            headers={
+                'User-Agent': cat(
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; ',
+                    'rv:106.0) Gecko/20100101 Firefox/106.0'
+                ),
+                'Referrer': 'https://chat.f-list.net'
+            },
+            proxies={
+                'http': '0.0.0.0:80',
+                'https': '0.0.0.0:80'
             }
         )
         response = json.loads(response.text)
+        log('JCH/DBG', response)
+        vis: str = response['infotags'].get('64', '')
+        age: str = response['infotags'].get('1', '')
+        bad_age: bool = age_tester(age)
+        bad_vis: bool = age_tester(vis)
 
-        vis: str = response['infotags'].get('64')
-        age: str = response['infotags'].get('1')
+        if bad_age or bad_vis:
+            age = f'[{age}]' if bad_age else age
+            vis = f'[{vis}]' if bad_vis else vis
 
-        if age_tester(age) or age_tester(vis):
             log('JCH/DBG', f'Kick {character}, age:{age}, visual:{vis}', io=0)
-            return await SOCKET.send(
-                'CKU',
-                {
-                    'channel': channel,
-                    'character': character
-                }
-            )
+#            return await SOCKET.send(
+#                'CKU',
+#                {
+#                    'channel': channel,
+#                    'character': character
+#                }
+#            )
 
     async def SYS(data) -> None:
         log('SYS/DAT', data)
@@ -352,38 +375,6 @@ class Output:
 def remove_from_all_channels(user: str) -> None:
     for c_name in CHANNELS:
         CHANNELS[c_name].remove_user(user)
-
-
-# Yeah, nice try nerds. :)
-def jank_to_ascii(sanitize_me: str) -> str:
-    buffer: str = sanitize_me
-    # cycle through ascii table, do substitutions.
-    for to_rep in JANK_TO_ASCII_TABLE:
-        to_sub: str = JANK_TO_ASCII_TABLE[to_rep]
-        buffer = re.sub(f'[{to_sub}]', to_rep, buffer)
-    # clean out the non-ascii characters
-    buffer = re.sub('[^a-z0-9]', '', buffer)
-    return buffer
-
-
-def is_written_taboo(s: str) -> bool:
-    for age in WRITTEN_AGES:
-        if age in s:
-            return True
-    return False
-
-
-def age_tester(test_me: str) -> bool:
-    buffer: str = re.sub('[^a-zA-Z0-9]', '', test_me)
-    buffer = jank_to_ascii(test_me)
-    buffer = buffer.lower()
-    if is_written_taboo(buffer):
-        return True
-    if re.match('^[0-9]+$', buffer):
-        age: int = int(buffer, base=10)
-        if age < 18 and age > 5:
-            return True
-    return False
 
 
 def propagate_commands() -> None:

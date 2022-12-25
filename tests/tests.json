@@ -1,0 +1,48 @@
+{
+  "age_tester": [
+    {
+      "test": "\ud83c\udd54\ud83c\udd5b\ud83c\udd54\ud83c\udd65\ud83c\udd54\ud83c\udd5d",
+      "expects": true
+    },
+    {
+      "test": "\uff45\uff49\uff27\uff28\uff54",
+      "expects": true
+    },
+    {
+      "test": "\ud835\udcee\ud835\udcf2\ud835\udcd6\ud835\udcd7\ud835\udcfd",
+      "expects": true
+    },
+    {
+      "test": "\uff53\uff45\uff56\uff45\uff4e\uff54\uff45\uff45\uff4e",
+      "expects": true
+    },
+    {
+      "test": "\u1290\u127f\u1200\u127f\u12ad\u1355\u127f\u127f\u12ad",
+      "expects": true
+    },
+    {
+      "test": "15",
+      "expects": true
+    },
+    {
+      "test": "20",
+      "expects": false
+    },
+    {
+      "test": ". .-20.-...",
+      "expects": false
+    },
+    {
+      "test": "--1. 2.-- ",
+      "expects": true
+    },
+    {
+      "test": "\ud835\uddab\ud835\uddba\ud835\uddcd\ud835\uddbe \ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7\ud835\uddba\ud835\uddc0\ud835\uddbe \ud835\uddd2\ud835\uddbe\ud835\uddba\ud835\uddcb\ud835\uddcc! (\ud835\udda4\ud835\uddc2\ud835\uddc0\ud835\uddc1\ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7 \u2013 \ud835\uddad\ud835\uddc2\ud835\uddc7\ud835\uddbe\ud835\uddcd\ud835\uddbe\ud835\uddbe\ud835\uddc7) ",
+      "expects": false
+    },
+    {
+      "test": "when /hasn't/ he gotten carded",
+      "expects": false
+    }
+  ]
+}
