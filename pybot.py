@@ -9,12 +9,11 @@ from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.utils import cat
-
+from modules.shared import JANK_TO_ASCII_TABLE, SIMILARITY_TESTS, WRITTEN_AGES
 
 BOT_STATES: dict[str, dict] = {}
-URL_DOMAIN: str = 'https://f-list.net'
+URL_DOMAIN: str = 'https://www.f-list.net'
 URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
-URL_CHARACTER: str = f'{URL_DOMAIN}/c/'
 WS_URI: str = 'wss://chat.f-list.net/chat2'
 PATH_CWD: str = os.getcwd()
 
@@ -194,15 +193,19 @@ class Response:
         vis_valid: bool = False
         age_valid: bool = False
 
-        if age:
-            age_valid = bool(re.match('^[0-9]+$', age))
-        if vis:
-            vis_valid = bool(re.match('^[0-9]+$', vis))
-
         parameters: dict[str, str] = {
             'channel': channel,
             'character': character
         }
+
+        if age_tester(age) or age_tester(vis):
+            print(
+                cat(
+                    f'[{int(time())}]:JCH/DBG>> Kicked {character},',
+                    f' age:{age}, visual:{vis}'
+                )
+            )
+            return
 
         # print(f'[{int(time())}]:JCH/DBG<< OPS:', CHANNELS[channel].ops)
 #        try:
@@ -217,7 +220,7 @@ class Response:
                 print(
                     cat(
                         f'[{int(time())}]:JCH/DBG>> Kicked {character},',
-                        ' age:{age}, visual:{vis}'
+                        f' age:{age}, visual:{vis}'
                     )
                 )
                 return await SOCKET.send('CKU', parameters)
@@ -228,7 +231,7 @@ class Response:
                 print(
                     cat(
                         f'[{int(time())}]:JCH/DBG>> Kicked {character},',
-                        ' age:{age}, visual:{vis}'
+                        f' age:{age}, visual:{vis}'
                     )
                 )
                 return await SOCKET.send('CKU', parameters)
@@ -409,6 +412,45 @@ class Output:
 def remove_from_all_channels(user: str) -> None:
     for c_name in CHANNELS:
         CHANNELS[c_name].remove_user(user)
+
+
+# Yeah, nice try nerds. :)
+def jank_to_ascii(sanitize_me: str) -> str:
+    buffer: str = sanitize_me
+    # cycle through ascii table, do substitutions.
+    for to_rep in JANK_TO_ASCII_TABLE:
+        to_sub: str = JANK_TO_ASCII_TABLE[to_rep]
+        buffer = re.sub(f'[{to_sub}]', to_rep, buffer)
+    # clean out the non-ascii characters
+    buffer = re.sub('[^a-z0-9]', '', buffer)
+    return buffer
+
+
+def is_written_taboo(s: str) -> bool:
+    for age in WRITTEN_AGES:
+        if age in s:
+            return True
+    return False
+
+
+def age_tester(test_me: str) -> bool:
+    buffer: str = re.sub('[^a-zA-Z0-9]', '', test_me)
+    buffer = jank_to_ascii(test_me)
+    if is_written_taboo(buffer):
+        return True
+    if re.match('^[0-9]+$', buffer):
+        age: int = int(buffer, base=10)
+        if age < 18 and age > 5:
+            return True
+    return False
+
+
+def test_tester() -> None:
+    for string in SIMILARITY_TESTS:
+        if age_tester(string):
+            print('age tester test passed!')
+        else:
+            print('age tester test failed.')
 
 
 def propagate_commands() -> None:

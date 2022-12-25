@@ -17,7 +17,7 @@ def format_hp_bars(
     pass
 
 
-def fmt(scope: str, suf: str = '', io: int = 1) -> None:
+def fmt(scope: str, *args, suffix: str = '', io: int = 1) -> None:
     io_s: str = '<< ' if io else '>> '
-    suf_s: str = f'{suf} ' if suf else suf
-    print(f'[{int(time())}]:{scope}{io_s}{suf_s}')
+    suffix_s: str = f'{suffix} ' if suffix else suffix
+    print(f'[{int(time())}]:{scope}{io_s}{suffix_s}', *args)
