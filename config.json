@@ -1,7 +1,7 @@
 {
     "client_name": "PyBot",
-    "client_version": "0.0 A",
+    "client_version": "0.3 B",
     "bot_name": "PyBot",
     "retry_interval": 15,
-    "joined_channels": ["ADH-04ef230936a847d576fa"]
+    "joined_channels": ["ADH-a1d535385633ab68045b"]
 }

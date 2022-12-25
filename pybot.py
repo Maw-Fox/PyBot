@@ -8,8 +8,9 @@ from time import time
 from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
-from modules.utils import cat
-from modules.shared import JANK_TO_ASCII_TABLE, SIMILARITY_TESTS, WRITTEN_AGES
+from modules.user import User, GLOBAL_USER_LIST
+from modules.utils import cat, log
+from modules.shared import JANK_TO_ASCII_TABLE, WRITTEN_AGES
 
 BOT_STATES: dict[str, dict] = {}
 URL_DOMAIN: str = 'https://www.f-list.net'
@@ -76,7 +77,7 @@ class Socket:
     async def read(self, code, data) -> None:
         if hasattr(Response, code):
             if code != 'FLN':
-                print(f'[{int(time())}]:INBOUND<< ', code, data)
+                log('INBOUND', code, data)
             await getattr(Response, code)(data)
 
     async def send(self, code: str, message: str = '') -> None:
@@ -123,7 +124,7 @@ class Socket:
                         AUTH.check_ticket()
                     await self.read(code, data)
                 except Exception as error:
-                    print(f'[{int(time())}]:WEB/ERR<< {str(error)}')
+                    log('WEB/ERR', str(error))
 
     async def close(self) -> None:
         await self.current.close()
@@ -131,12 +132,12 @@ class Socket:
 
 class Response:
     async def ERR(data) -> None:
-        print(f'[{int(time())}]:ERR/ANY<< {json.dumps(data)}')
+        log('ERR/ANY', json.dumps(data))
 
     async def ORS(data) -> None:
         for i in data['channels']:
-            cur_ch: dict = data['channels'][i]
-            CHANNELS[cur_ch['name']] = Channel(**cur_ch)
+            channel_data: dict = data['channels'][i]
+            CHANNELS[channel_data['name']] = Channel(**channel_data)
 
     async def ICH(data) -> None:
         channel: str = data['channel']
@@ -146,15 +147,9 @@ class Response:
 
         channel_inst: Channel = CHANNELS[data['channel']]
 
-        parameters: str = json.dumps(
-            {
-                'channel': channel
-            }
-        )
-
         Queue(
             SOCKET.current.send,
-            f'COL {parameters}'
+            f'COL ' + json.dumps({'channel': channel})
         )
 
         for user in data['users']:
@@ -163,12 +158,6 @@ class Response:
     async def JCH(data) -> None:
         character: str = data['character']['identity']
         channel: str = data['channel']
-
-        params = {
-            'account': CONFIG.account_name,
-            'ticket': AUTH.auth_key,
-            'name': character,
-        }
 
         if not CHANNELS.get(channel):
             CHANNELS[channel] = Channel(channel)
@@ -181,63 +170,29 @@ class Response:
 
         response = requests.post(
             'https://www.f-list.net/json/api/character-data.php',
-            data=params
+            data={
+                'account': CONFIG.account_name,
+                'ticket': AUTH.auth_key,
+                'name': character,
+            }
         )
-
         response = json.loads(response.text)
-
-        print(f'[{int(time())}]:JCH/DBG<< ', json.dumps(response['infotags']))
 
         vis: str = response['infotags'].get('64')
         age: str = response['infotags'].get('1')
-        vis_valid: bool = False
-        age_valid: bool = False
-
-        parameters: dict[str, str] = {
-            'channel': channel,
-            'character': character
-        }
 
         if age_tester(age) or age_tester(vis):
-            print(
-                cat(
-                    f'[{int(time())}]:JCH/DBG>> Kicked {character},',
-                    f' age:{age}, visual:{vis}'
-                )
+            log('JCH/DBG', f'Kick {character}, age:{age}, visual:{vis}', io=0)
+            return await SOCKET.send(
+                'CKU',
+                {
+                    'channel': channel,
+                    'character': character
+                }
             )
-            return
-
-        # print(f'[{int(time())}]:JCH/DBG<< OPS:', CHANNELS[channel].ops)
-#        try:
-#            CHANNELS[channel].ops.index(CONFIG.bot_name)
-#        except ValueError as err:
-#            print(err)
-#            return
-        # print(age, vis)
-        if age_valid:
-            age = int(age, base=10)
-            if age > 5 and age < 18:
-                print(
-                    cat(
-                        f'[{int(time())}]:JCH/DBG>> Kicked {character},',
-                        f' age:{age}, visual:{vis}'
-                    )
-                )
-                return await SOCKET.send('CKU', parameters)
-
-        if vis_valid:
-            vis = int(vis, base=10)
-            if vis > 5 and vis < 18:
-                print(
-                    cat(
-                        f'[{int(time())}]:JCH/DBG>> Kicked {character},',
-                        f' age:{age}, visual:{vis}'
-                    )
-                )
-                return await SOCKET.send('CKU', parameters)
 
     async def SYS(data) -> None:
-        print(f'[{int(time())}]:SYS/DAT<<', data)
+        log('SYS/DAT', data)
         if data['message'] and 'Channel moderator' in data['message']:
             channel_inst: Channel = CHANNELS[data['channel']]
             msg: str = data['message']
@@ -316,18 +271,11 @@ class Response:
             'channel': channel
         }
 
-        # print(f'[{int(time())}]:MSG/DBG<< ARGS:', extras)
         if not channel_inst.ops.get(character):
             return
 
-        # print(f'[{int(time())}]:MSG/DBG<< CMD:', command)
-
         if not BOT_COMMANDS.get(command):
             return
-#            return await output.send(
-#                f'Unknown command "[b]{command}[/b]".'
-#                # ', type \'[i]!help[/i]\' for a list of commands.'
-#            )
 
         await BOT_COMMANDS[command].solver(extras)
 
@@ -368,11 +316,7 @@ class Output:
         self.send = self.__send_channel
 
     async def __send_private(self, *message) -> None:
-        print(
-            f'[{int(time())}]:SEN/PRI>> TS:',
-            time() - Queue.last,
-            Queue.throttle
-        )
+        log('SEN/PRI', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_private, message)
             return
@@ -387,11 +331,7 @@ class Output:
         await SOCKET.send(f'PRI {json.dumps(message)}')
 
     async def __send_channel(self, *message) -> None:
-        print(
-            f'[{int(time())}]:SEN/CHA>> TS:',
-            time() - Queue.last,
-            Queue.throttle
-        )
+        log('SEN/MSG', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_channel, message)
             return
@@ -446,14 +386,6 @@ def age_tester(test_me: str) -> bool:
     return False
 
 
-def test_tester() -> None:
-    for string in SIMILARITY_TESTS:
-        if age_tester(string):
-            print('age tester test passed!')
-        else:
-            print('age tester test failed.')
-
-
 def propagate_commands() -> None:
     async def yeetus(args) -> None:
         channel: str = args['channel']
@@ -466,7 +398,7 @@ def propagate_commands() -> None:
         output = Output(channel=channel)
 
         if not (
-            channel_inst.ops.get(by) or channel_inst.ops.get(CONFIG.bot_name)
+            channel_inst.ops.get(by) and channel_inst.ops.get(CONFIG.bot_name)
         ):
             return
 
