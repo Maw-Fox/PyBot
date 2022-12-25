@@ -3,7 +3,9 @@ import json
 from time import time, sleep
 
 from modules.config import CONFIG
-from modules.constants import URL_API_GET_TICKET, AUTH_DURATION
+
+AUTH_DURATION: int = 60 * 12
+URL_API_GET_TICKET: str = 'https://www.f-list.net/json/getApiTicket.php'
 
 
 class Auth:

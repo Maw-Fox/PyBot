@@ -1,6 +1,6 @@
 from time import time
 
-from modules.constants import PRUNE_INSTANCE_DURATION
+from modules.shared import PRUNE_INSTANCE_DURATION
 
 
 class HPUser:

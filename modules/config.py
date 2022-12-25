@@ -2,8 +2,40 @@ import sys as system
 import os
 import json
 import hashlib
+import argparse
 
-from modules.constants import ARGS
+PARSER = argparse.ArgumentParser(
+    prog='PyBot',
+    description='A F-Chat bot framework running in Python.',
+    allow_abbrev=False,
+    add_help=True
+)
+PARSER.add_argument(
+    '--username',
+    '--user',
+    dest='username',
+    default=None,
+    required=False,
+    type=str,
+    help='Your account username. An alternative to creds.json.'
+)
+PARSER.add_argument(
+    '--password',
+    '--pass',
+    dest='password',
+    default=None,
+    required=False,
+    type=str,
+    help='Your account password. An alternative to creds.json.'
+)
+PARSER.add_argument(
+    '--nophrase',
+    '--skip',
+    dest='skip_phrase',
+    action='store_true',
+    help='Skip the setting of the passphrase.'
+)
+ARGS = PARSER.parse_args()
 
 
 class Config:
