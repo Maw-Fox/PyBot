@@ -436,6 +436,7 @@ def is_written_taboo(s: str) -> bool:
 def age_tester(test_me: str) -> bool:
     buffer: str = re.sub('[^a-zA-Z0-9]', '', test_me)
     buffer = jank_to_ascii(test_me)
+    buffer = buffer.lower()
     if is_written_taboo(buffer):
         return True
     if re.match('^[0-9]+$', buffer):
