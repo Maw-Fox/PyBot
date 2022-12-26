@@ -169,7 +169,7 @@ class Response:
 
         chan.add_char(char)
 
-        if not BOT_STATES['yeetus'].get(chan.name) and False:
+        if not BOT_STATES['yeetus'].get(chan.name):
             return
 
         response = requests.post(
@@ -383,7 +383,7 @@ def propagate_commands() -> None:
         output: Output = Output(channel=chan)
 
         if not (
-            chan.ops.get(char) and chan.ops.get(CONFIG.bot_name)
+            chan.ops.get(char)
         ):
             return
 

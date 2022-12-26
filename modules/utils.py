@@ -58,7 +58,8 @@ def age_tester(test_me: str) -> bool:
     if is_written_taboo(buffer):
         return True
     # clear all non-char/non-number characters, except dash (for range comp)
-    exploded: list[str] = re.split('[/ -]', buffer)
+    buffer = re.sub('[^a-z0-9 ]', '', buffer)
+    exploded: list[str] = re.split('[ ]', buffer)
     for part in exploded:
         if re.match('^[0-9]+$', part):
             age: int = int(part, base=10)
