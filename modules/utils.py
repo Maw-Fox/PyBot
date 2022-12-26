@@ -3,22 +3,7 @@ import re
 from time import time
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS
 from modules.character import Character, GLOBAL_CHARACTER_LIST
-
-
-def cat(*args: str) -> str:
-    out = ''
-    for v in args:
-        out += v
-    return out
-
-
-def format_hp_bars(
-    id: str,
-    hp: int,
-    hp_max: int,
-    dmg: int
-) -> str:
-    pass
+from modules.channel import Channel, CHANNELS
 
 
 def log(scope: str, *args, suffix: str = '', io: int = 1) -> None:
@@ -53,7 +38,7 @@ def is_written_taboo(s: str) -> bool:
 def age_tester(test_me: str) -> bool:
     if not test_me:
         return False
-    buffer = jank_to_ascii(test_me)
+    buffer: str = jank_to_ascii(test_me)
     buffer = buffer.lower()
     if is_written_taboo(buffer):
         return True
@@ -70,3 +55,13 @@ def age_tester(test_me: str) -> bool:
 
 def get_char(character: str) -> Character | None:
     return GLOBAL_CHARACTER_LIST.get(character, None)
+
+
+def get_chan(channel: str) -> Channel | None:
+    return CHANNELS.get(channel)
+
+
+def remove_all(character: Character) -> None:
+    GLOBAL_CHARACTER_LIST.pop(character.name)
+    for channel in CHANNELS:
+        get_chan(channel).remove_char(character)

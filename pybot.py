@@ -4,68 +4,23 @@ import requests
 import os
 
 from time import time
+from math import floor
 from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
-from modules.character import Character, GLOBAL_CHARACTER_LIST
-from modules.utils import cat, log, age_tester, get_char
+from modules.channel import Channel
+from modules.character import Character
+from modules.utils import log, age_tester, get_char, get_chan, remove_all
+from modules.queue import Queue
+from modules.commands import BotCommand, BOT_COMMANDS
+from modules.shared import UPTIME, COMMAND_TIMEOUT
 
-BOT_STATES: dict[str, dict] = {}
 URL_DOMAIN: str = 'https://www.f-list.net'
 URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
 WS_URI: str = 'wss://chat.f-list.net/chat2'
 PATH_CWD: str = os.getcwd()
 
-GLOBAL_OPS: list[Character] = []
-
-
-class Channel:
-    def __init__(
-        self,
-        name: str
-    ) -> None:
-        self.name = name
-        self.title = name
-        self.characters: dict[str, Character] = {}
-        self.ops: dict[str, Character] = {}
-        CHANNELS[self.name] = self
-
-    def remove_char(self, character: Character) -> None:
-        if not self.characters.get(character):
-            return
-        self.characters.pop(character)
-
-    def add_char(self, character: Character) -> None:
-        self.characters[character]: Character = character
-
-    def add_op(self, character: Character) -> None:
-        self.ops[character] = character
-
-    def remove_op(self, character: Character) -> None:
-        self.ops.pop(character)
-
-
-CHANNELS: dict[str, Channel] = {}
-
-
-class Queue:
-    last: float = time()
-    throttle: float = 2.0
-
-    def __init__(self, callback, data) -> None:
-        self.data = data
-        self.callback = callback
-        QUEUE.append(self)
-
-    async def run(self) -> None:
-        await self.callback(self.data)
-
-    async def cycle() -> None:
-        if len(QUEUE) and time() - Queue.last > Queue.throttle:
-            await QUEUE.pop().run()
-
-
-QUEUE: list[Queue] = []
+KILLS: dict[Character, int] = {}
 
 
 class Socket:
@@ -169,7 +124,7 @@ class Response:
 
         chan.add_char(char)
 
-        if not BOT_STATES['yeetus'].get(chan.name):
+        if not BOT_COMMANDS['yeetus'].state.get(chan.name):
             return
 
         response = requests.post(
@@ -198,6 +153,9 @@ class Response:
             vis = f'[{vis}]' if bad_vis else vis
 
             log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
+
+            KILLS[char] = KILLS.get(char, 0) + 1
+
             return await SOCKET.send(
                 'CKU',
                 {
@@ -210,7 +168,7 @@ class Response:
         log('SYS/DAT', data)
 
     async def FLN(data) -> None:
-        remove_from_all_channels(get_char(data['character']))
+        remove_all(get_char(data['character']))
 
     async def NLN(data) -> None:
         Character(
@@ -233,9 +191,9 @@ class Response:
 
         if message[:1] != '!':
             return await output.send(
-                cat(
-                    'I am a [b]bot[/b] and not a real person.\n\n'
-                    'If you were kicked from Anal Addicts, by this bot, ',
+                (
+                    'I am a [b]bot[/b] and not a real person.\n\n' +
+                    'If you were kicked from Anal Addicts, by this bot, ' +
                     'I would suggest not joining on this character again!'
                 )
             )
@@ -284,9 +242,6 @@ class Response:
             'channel': chan.name
         }
 
-        if not chan.ops.get(char):
-            return
-
         if not BOT_COMMANDS.get(command):
             return
 
@@ -294,21 +249,6 @@ class Response:
 
 
 SOCKET: Socket = Socket()
-
-
-class BotCommand():
-    def __init__(
-        self,
-        command_name: str,
-        solver,
-        help: str
-    ) -> None:
-        self.command_name: str = command_name
-        self.solver = solver
-        self.help: str = help
-
-
-BOT_COMMANDS: dict[str, BotCommand] = {}
 
 
 class Output:
@@ -328,7 +268,7 @@ class Output:
 
         self.send = self.__send_channel
 
-    async def __send_private(self, *message) -> None:
+    async def __send_private(self, message) -> None:
         log('SEN/PRI', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_private, message)
@@ -338,12 +278,12 @@ class Output:
 
         message: dict[str, str] = {
             'recipient': self.recipient.name,
-            'message': cat(*message)
+            'message': message
         }
 
         await SOCKET.send(f'PRI {json.dumps(message)}')
 
-    async def __send_channel(self, *message) -> None:
+    async def __send_channel(self, message) -> None:
         log('SEN/MSG', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
         if time() - Queue.last < Queue.throttle:
             Queue(self.__send_channel, message)
@@ -353,7 +293,7 @@ class Output:
 
         message: dict[str, str] = {
             'channel': self.channel.name,
-            'message': cat(*message)
+            'message': message
         }
 
         await SOCKET.send(f'MSG {json.dumps(message)}')
@@ -362,36 +302,65 @@ class Output:
         await SOCKET.send(f'PIN')
 
 
-def remove_from_all_channels(character: Character) -> None:
-    GLOBAL_CHARACTER_LIST.pop(character.name)
-    for channel in CHANNELS:
-        get_chan(channel).remove_char(character)
-
-
-def get_chan(channel: str) -> Channel | None:
-    return CHANNELS.get(channel)
-
-
 def propagate_commands() -> None:
+    async def yeeted(args) -> None:
+        chan: Channel = get_chan(args['channel'])
+        output: Output = Output(channel=chan)
+        current_time: int = int(time())
+        time_diff_state: int = int(time()) - BOT_COMMANDS['yeeted'].state
+        time_diff: int = current_time - UPTIME
+        time_days: int = floor(time_diff / 86400)
+        time_hours: int = floor((time_diff % 86400) / 3600)
+        time_minutes: int = floor((time_diff % 3600) / 60)
+        time_seconds: int = floor(time_diff % 60)
+
+        unique_kills: int = len(KILLS.keys())
+        kills: int = sum(KILLS.values())
+
+        if not chan or time_diff_state < COMMAND_TIMEOUT:
+            return
+
+        BOT_COMMANDS['yeeted'].state = int(time())
+
+        time_string: str = 'within the last [i]'
+        time_string += f'{time_days} day(s), ' if time_days else ''
+        time_string += f'{time_hours} hour(s), ' if time_hours else ''
+        time_string += f'{time_minutes} minute(s), ' if time_minutes else ''
+        time_string += f'{time_seconds} second(s), ' if time_seconds else ''
+        time_string = time_string[:len(time_string) - 2]
+        time_string += '.[/i] [sup]:>~[/sup]'
+
+        await output.send(
+            (
+                f'I have bounced [b]{unique_kills}[/b] unique character(s) ' +
+                f'a total of [b]{kills}[/b] time(s) ' +
+                time_string
+            )
+        )
+
+    cmd = BotCommand(
+        'yeeted',
+        yeeted,
+        'Let me show you my kill count. >:3~',
+        state=0
+    )
+
     async def yeetus(args) -> None:
         chan: Channel = get_chan(args['channel'])
         char: Character = get_char(args['from'])
 
+        output: Output = Output(channel=chan)
+
         if not chan:
             return
-
-        output: Output = Output(channel=chan)
 
         if not (
             chan.ops.get(char)
         ):
             return
 
-        if not BOT_STATES['yeetus'].get(chan.name):
-            BOT_STATES['yeetus'][chan.name] = False
-
-        NEW_STATE: bool = not BOT_STATES['yeetus'][chan.name]
-        BOT_STATES['yeetus'][chan.name] = NEW_STATE
+        NEW_STATE: bool = not BOT_COMMANDS['yeetus'].state.get(chan.name, None)
+        BOT_COMMANDS['yeetus'].state[chan.name] = NEW_STATE
 
         if NEW_STATE:
             await output.send(
@@ -404,17 +373,15 @@ def propagate_commands() -> None:
                 ' Yeet mode [i]disengaged[/i].'
             )
 
-    cmd = BotCommand(
+    BotCommand(
         'yeetus',
         yeetus,
-        'Gotta protect the kids from themselves. :>~'
+        'Gotta protect the kids from themselves. :>~',
+        state={}
     )
 
-    BOT_COMMANDS['yeetus'] = cmd
-    BOT_STATES['yeetus'] = {}
-
     for chan_str in CONFIG.joined_channels:
-        BOT_STATES['yeetus'][chan_str] = False
+        cmd.state[chan_str] = False
 
     """
     async def help(args) -> None:

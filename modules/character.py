@@ -15,6 +15,7 @@ class Character:
         self.gender: str = gender
         self.status: str = status
         self.status_message: str = status_message
+
         GLOBAL_CHARACTER_LIST[name] = self
 
     def remove(self) -> None:
@@ -41,3 +42,4 @@ class HPUser:
 
 HP_USERS: dict[str, HPUser] = {}
 GLOBAL_CHARACTER_LIST: dict[str, Character] = {}
+GLOBAL_OPS: list[Character] = []

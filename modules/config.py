@@ -26,17 +26,17 @@ class Config:
         self.joined_channels: list[str] = joined_channels
 
 
-def do_crypt(passphrase: str, password: str, forward: bool = True) -> bytes:
-    key: hashlib._Hash = hashlib.new('sha512', usedforsecurity=True)
-    key.update(bytes(passphrase, encoding='UTF-8'))
+def do_crypt(phrase: str, pw: str, forward: bool = True, _t='sha512') -> bytes:
+    key: hashlib._Hash = hashlib.new(_t, usedforsecurity=True)
+    key.update(bytes(phrase, encoding='UTF-8'))
     bytes_passphrase: bytes = key.digest()
     bytes_list: list[int] = []
     bytes_password: bytes
 
     if forward:
-        bytes_password = bytes(password, 'UTF-8')
+        bytes_password = bytes(pw, 'UTF-8')
     else:
-        bytes_password = bytes.fromhex(password)
+        bytes_password = bytes.fromhex(pw)
 
     for b_idx in range(len(bytes_passphrase)):
         if forward and b_idx >= len(bytes_password):
