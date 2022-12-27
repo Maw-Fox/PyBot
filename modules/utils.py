@@ -1,4 +1,5 @@
 import re
+import unicodedata as unicode
 
 from time import time
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS
@@ -39,6 +40,8 @@ def age_tester(test_me: str) -> bool:
     if not test_me:
         return False
     buffer: str = jank_to_ascii(test_me)
+    buffer = unicode.normalize('NFKD', buffer)
+    buffer = unicode.normalize('NFKC', buffer)
     buffer = buffer.lower()
     if is_written_taboo(buffer):
         return True

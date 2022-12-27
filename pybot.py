@@ -307,7 +307,7 @@ def propagate_commands() -> None:
         chan: Channel = get_chan(args['channel'])
         output: Output = Output(channel=chan)
         current_time: int = int(time())
-        time_diff_state: int = int(time()) - BOT_COMMANDS['yeeted'].state
+        time_diff_state: int = int(time()) - BOT_COMMANDS['yeeted'].state['l']
         time_diff: int = current_time - UPTIME
         time_days: int = floor(time_diff / 86400)
         time_hours: int = floor((time_diff % 86400) / 3600)
@@ -320,7 +320,7 @@ def propagate_commands() -> None:
         if not chan or time_diff_state < COMMAND_TIMEOUT:
             return
 
-        BOT_COMMANDS['yeeted'].state = int(time())
+        BOT_COMMANDS['yeeted'].state['l'] = int(time())
 
         time_string: str = 'within the last [i]'
         time_string += f'{time_days} day(s), ' if time_days else ''
@@ -364,12 +364,12 @@ def propagate_commands() -> None:
 
         if NEW_STATE:
             await output.send(
-                f'You got it, [b]{char.name}[/b]!',
+                f'You got it, [b]{char.name}[/b]!' +
                 ' Yeet mode [i]engaged[/i].'
             )
         else:
             await output.send(
-                f'You got it, [b]{char.name}[/b]!',
+                f'You got it, [b]{char.name}[/b]!' +
                 ' Yeet mode [i]disengaged[/i].'
             )
 
