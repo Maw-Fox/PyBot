@@ -13,14 +13,14 @@ class Auth:
     __valid_until: int = None
 
     def __init__(self) -> None:
-        self.__get_new_auth_ticket()
+        self.get_new_auth_ticket()
 
     def check_ticket(self) -> None:
         t: int = int(time())
         if t > self.__valid_until:
-            self.__get_new_auth_ticket()
+            self.get_new_auth_ticket()
 
-    def __get_new_auth_ticket(self) -> None:
+    def get_new_auth_ticket(self) -> None:
         params = {
             'account': CONFIG.account_name,
             'password': CONFIG.account_password

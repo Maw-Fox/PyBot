@@ -5,6 +5,7 @@ from time import time
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS
 from modules.character import Character, GLOBAL_CHARACTER_LIST
 from modules.channel import Channel, CHANNELS
+from modules.log import ModLog, MOD_LOGS
 
 
 def log(scope: str, *args, suffix: str = '', io: int = 1) -> None:
@@ -20,7 +21,7 @@ def jank_to_ascii(sanitize_me: str) -> str:
         to_sub: str = JANK_TO_ASCII_TABLE[to_rep]
         buffer = re.sub(f'[{to_sub}]', to_rep, buffer)
     # clean out the non-ascii characters, except space and dash
-    buffer = re.sub('[^a-z0-9 \\-\\/]', '', buffer)
+    buffer = re.sub('[^a-zA-Z0-9 \\-\\/]', '', buffer)
     return buffer
 
 
@@ -41,18 +42,39 @@ def age_tester(test_me: str) -> bool:
         return False
     buffer: str = jank_to_ascii(test_me)
     buffer = unicode.normalize('NFKD', buffer)
-    buffer = unicode.normalize('NFKC', buffer)
     buffer = buffer.lower()
     if is_written_taboo(buffer):
         return True
     # clear all non-char/non-number characters, except dash (for range comp)
-    buffer = re.sub('[^a-z0-9 ]', '', buffer)
-    exploded: list[str] = re.split('[ ]', buffer)
-    for part in exploded:
-        if re.match('^[0-9]+$', part):
+    buffer = re.sub('[^a-z0-9 -/]', '', buffer)
+    buffer = buffer.replace('/', '-')
+    exploded: list[str] = buffer.split(' ')
+    for idx in range(len(exploded)):
+        part: str = exploded[idx]
+        try:
+            exploded.index('-', idx)
+            is_minimum: bool = True
+        except ValueError:
+            is_minimum: bool = False
+
+        if not is_minimum and re.match('^[0-9]+$', part):
             age: int = int(part, base=10)
             if age < 18 and age > 5:
                 return True
+    buffer = buffer.replace(' ', '')
+    exploded = buffer.split('-')
+    first_age: bool = True
+    for idx in range(len(exploded)):
+        part: str = exploded[idx]
+        is_age: re.Match = re.match('^[0-9]+$', part)
+        if not is_age:
+            continue
+        if first_age:
+            first_age = False
+            continue
+        age: int = int(part, base=10)
+        if age < 18 and age > 5:
+            return True
     return False
 
 
@@ -68,3 +90,7 @@ def remove_all(character: Character) -> None:
     GLOBAL_CHARACTER_LIST.pop(character.name)
     for channel in CHANNELS:
         get_chan(channel).remove_char(character)
+
+
+def get_logs(n_items: int = 10) -> list[ModLog]:
+    MOD_LOGS[:n_items]

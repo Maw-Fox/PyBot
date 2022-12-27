@@ -59,6 +59,34 @@
     {
       "test": "18/32",
       "expects": false
+    },
+    {
+      "test": "13K+",
+      "expects": false
+    },
+    {
+      "test": "Eight thousand",
+      "expects": true
+    },
+    {
+      "test": "14-16",
+      "expects": true
+    },
+    {
+      "test": "13 - 24",
+      "expects": false
+    },
+    {
+      "test": "14/16",
+      "expects": true
+    },
+    {
+      "test": "13 / 24",
+      "expects": false
+    },
+    {
+      "test": "13/24",
+      "expects": false
     }
   ]
 }

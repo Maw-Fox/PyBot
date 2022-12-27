@@ -14,6 +14,7 @@ from modules.utils import log, age_tester, get_char, get_chan, remove_all
 from modules.queue import Queue
 from modules.commands import BotCommand, BOT_COMMANDS
 from modules.shared import UPTIME, COMMAND_TIMEOUT
+from modules.log import ModLog, MOD_LOGS
 
 URL_DOMAIN: str = 'https://www.f-list.net'
 URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
@@ -29,8 +30,11 @@ class Socket:
         self.initialized: bool = False
 
     async def read(self, code, data) -> None:
+        ign: dict[str, int] = {
+            'FLN': 1, 'LIS': 1, 'NLN': 1, 'PIN': 1
+        }
         if hasattr(Response, code):
-            if code != 'FLN' and code != 'LIS' and code != 'NLN':
+            if not ign.get(code, 0):
                 log('INBOUND', code, data)
             await getattr(Response, code)(data)
 
@@ -113,7 +117,8 @@ class Response:
         for char_str in data['oplist']:
             if not char_str:
                 continue
-            chan.add_op(get_char(char_str))
+
+            chan.add_op(char_str)
 
     async def JCH(data) -> None:
         char: Character = get_char(data['character']['identity'])
@@ -139,7 +144,10 @@ class Response:
         response = json.loads(response.text)
 
         if not response.get('infotags'):
-            return log('JCH/DBG', response)
+            log('JCH/DBG', response)
+            if 'Invalid ticket.' == response.get('error'):
+                AUTH.get_new_auth_ticket()
+            return
 
         vis: str = response['infotags'].get('64', '')
         age: str = response['infotags'].get('1', '')
@@ -151,6 +159,13 @@ class Response:
         if bad_age or bad_vis:
             age = f'[{age}]' if bad_age else age
             vis = f'[{vis}]' if bad_vis else vis
+
+            ModLog(
+                channel=chan,
+                type='Age Restriction',
+                character=char,
+                reason=f'age: {age}, visual: {vis}'
+            )
 
             log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
 
@@ -193,8 +208,13 @@ class Response:
             return await output.send(
                 (
                     'I am a [b]bot[/b] and not a real person.\n\n' +
-                    'If you were kicked from Anal Addicts, by this bot, ' +
-                    'I would suggest not joining on this character again!'
+                    'If you were kicked from [b]Anal Addicts[/b] by this ' +
+                    'bot, I would suggest not joining on this character ' +
+                    'again! We do not allow characters that present as or ' +
+                    'are -- in fact -- underaged!\n\nBe certain that your ' +
+                    'character\'s [b]age[/b] and [b]visible age[/b] are ' +
+                    'set to values and/or ranges that do not dip beneath 18 ' +
+                    'years of age!'
                 )
             )
 
@@ -218,12 +238,13 @@ class Response:
                 'for a list of commands.'
             )
 
-        await BOT_COMMANDS.get(command).solver(extras)
+        await BOT_COMMANDS.get(command).solver(extras, output)
 
     async def MSG(data) -> None:
         message: str = data['message']
         char: Character = get_char(data['character'])
         chan: Channel = get_chan(data['channel'])
+        output: Output = Output(channel=chan)
 
         if message[:1] != '!':
             return
@@ -245,7 +266,7 @@ class Response:
         if not BOT_COMMANDS.get(command):
             return
 
-        await BOT_COMMANDS.get(command).solver(extras)
+        await BOT_COMMANDS.get(command).solver(extras, output)
 
 
 SOCKET: Socket = Socket()
@@ -302,12 +323,56 @@ class Output:
         await SOCKET.send(f'PIN')
 
 
-def propagate_commands() -> None:
-    async def yeeted(args) -> None:
-        chan: Channel = get_chan(args['channel'])
+def build_params(args) -> tuple[Output, Character, Channel | None]:
+    char: Character = get_char(args['from'])
+    chan: Channel | None = None
+    if args['channel']:
+        chan = get_chan(args['channel'])
         output: Output = Output(channel=chan)
+    else:
+        output: Output = Output(recipient=char)
+    return (output, char, chan)
+
+
+def propagate_commands() -> None:
+    async def logs(args, output: Output) -> None:
+        amount: int = int(args['params']) if args['params'] else 10
+        output, char, chan = build_params(args)
+        chan: Channel = get_chan('ADH-04ef230936a847d576fa')
+        out_str: str = ''
+
+        if not chan.is_op(char.name):
+            return
+
+        logs: list[ModLog] = MOD_LOGS[:amount]
+        amount = len(logs)
+
+        for idx in range(amount):
+            act: ModLog = logs[idx]
+            out_str += f'[b]{idx}:[/b] target: [b]{act.character.name}[/b]\n'
+            out_str += f'    type: [b]{act.type}[/b]\n'
+            out_str += f'    reason: [i]{act.reason}[/i]\n'
+
+        out_str = out_str[:len(out_str) - 1]
+
+        await output.send(
+            (
+                f'Log for the last [b]{amount}[/b] of moderation actions:\n' +
+                out_str
+            )
+        )
+
+    BotCommand(
+        'logs',
+        logs,
+        'A log of moderation actions that the bot has taken.'
+    )
+
+    async def yeeted(args, output: Output) -> None:
+        chan: Channel = output.channel
         current_time: int = int(time())
-        time_diff_state: int = int(time()) - BOT_COMMANDS['yeeted'].state['l']
+        time_last: int = BOT_COMMANDS['yeeted'].state.get('l', 0)
+        time_diff_state: int = int(time()) - time_last
         time_diff: int = current_time - UPTIME
         time_days: int = floor(time_diff / 86400)
         time_hours: int = floor((time_diff % 86400) / 3600)
@@ -338,25 +403,21 @@ def propagate_commands() -> None:
             )
         )
 
-    cmd = BotCommand(
+    BotCommand(
         'yeeted',
         yeeted,
         'Let me show you my kill count. >:3~',
         state=0
     )
 
-    async def yeetus(args) -> None:
-        chan: Channel = get_chan(args['channel'])
+    async def yeetus(args, output: Output) -> None:
         char: Character = get_char(args['from'])
-
-        output: Output = Output(channel=chan)
+        chan: Channel = get_chan(args['channel'])
 
         if not chan:
             return
 
-        if not (
-            chan.ops.get(char)
-        ):
+        if not chan.is_op(char.name):
             return
 
         NEW_STATE: bool = not BOT_COMMANDS['yeetus'].state.get(chan.name, None)
@@ -379,9 +440,6 @@ def propagate_commands() -> None:
         'Gotta protect the kids from themselves. :>~',
         state={}
     )
-
-    for chan_str in CONFIG.joined_channels:
-        cmd.state[chan_str] = False
 
     """
     async def help(args) -> None:

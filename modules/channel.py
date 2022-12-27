@@ -9,7 +9,7 @@ class Channel:
         self.name: str = name
         self.title: str = name
         self.characters: dict[str, Character] = {}
-        self.ops: dict[str, Character] = {}
+        self.ops: dict[str, int] = {}
         CHANNELS[self.name] = self
 
     def remove_char(self, character: Character) -> None:
@@ -20,11 +20,14 @@ class Channel:
     def add_char(self, character: Character) -> None:
         self.characters[character]: Character = character
 
-    def add_op(self, character: Character) -> None:
-        self.ops[character] = character
+    def add_op(self, s_character: str) -> None:
+        self.ops[s_character] = 1
 
-    def remove_op(self, character: Character) -> None:
-        self.ops.pop(character)
+    def remove_op(self, s_character: str) -> None:
+        self.ops.pop(s_character)
+
+    def is_op(self, s_character: str) -> bool:
+        return bool(self.ops.get(s_character))
 
 
 CHANNELS: dict[str, Channel] = {}
