@@ -66,7 +66,7 @@
     },
     {
       "test": "Eight thousand",
-      "expects": true
+      "expects": false
     },
     {
       "test": "14-16",
@@ -87,6 +87,58 @@
     {
       "test": "13/24",
       "expects": false
+    },
+    {
+      "test": "\ud835\ude9d\ud835\ude91\ud835\ude92\ud835\ude9b\ud835\ude9d\ud835\udea2\u0020\ud835\ude9c\ud835\ude92\ud835\udea1",
+      "expects": false
+    },
+    {
+      "test": "thirty six",
+      "expects": false
+    },
+    {
+      "test": "thirty-nine",
+      "expects": false
+    },
+    {
+      "test": "twenty nine",
+      "expects": false
+    },
+    {
+      "test": "forty-seven",
+      "expects": false
+    },
+    {
+      "test": "nine-hundred",
+      "expects": false
+    },
+    {
+      "test": "six thousand",
+      "expects": false
+    },
+    {
+      "test": "forty-seven",
+      "expects": false
+    },
+    {
+      "test": "nine-hundred",
+      "expects": false
+    },
+    {
+      "test": "i am seven",
+      "expects": true
+    },
+    {
+      "test": "totally not nine",
+      "expects": true
+    },
+    {
+      "test": "sixteen",
+      "expects": true
+    },
+    {
+      "test": "seven",
+      "expects": true
     }
   ]
 }

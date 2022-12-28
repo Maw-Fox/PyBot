@@ -25,7 +25,17 @@ def jank_to_ascii(sanitize_me: str) -> str:
     return buffer
 
 
+WRITTEN_EXCL: re.Pattern = re.compile(
+    '((twent|thirt|fort|fift|sixt|sevent|eight|ninet)[y]?[ -]+' +
+    '(six|seven|eight|nine|ten)|(six|seven|eight|nine|ten)[ -]+' +
+    '(hundred|thousand))'
+)
+
+
 def is_written_taboo(s: str) -> bool:
+    exclude: re.Match = re.search(WRITTEN_EXCL, s)
+    if exclude:
+        return False
     exploded: list[str] = re.split('[^a-z0-9]', s)
     for age in TEXT_AGE_FALSEPOS:
         for part in exploded:

@@ -22,6 +22,12 @@ WS_URI: str = 'wss://chat.f-list.net/chat2'
 PATH_CWD: str = os.getcwd()
 
 KILLS: dict[Character, int] = {}
+KILLS_LAST: dict[Character, int] = {}
+CHECK: dict[str, int] = {
+    'last': 1,
+    'every': 60,
+    'clear': 300
+}
 
 
 class Socket:
@@ -77,7 +83,14 @@ class Socket:
                     if data:
                         data = json.loads(data)
                     else:
+                        t: int = int(time())
                         AUTH.check_ticket()
+                        if t - CHECK['last'] > CHECK['every']:
+                            CHECK['last'] = t
+                            for char in KILLS_LAST:
+                                ts: int = KILLS_LAST[char]
+                                if t - ts > CHECK['clear']:
+                                    KILLS_LAST.pop(char)
                     await self.read(code, data)
                 except Exception as error:
                     log('WEB/ERR', str(error))
@@ -168,8 +181,19 @@ class Response:
             )
 
             log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
-
             KILLS[char] = KILLS.get(char, 0) + 1
+
+            if KILLS_LAST.get(char):
+                return SOCKET.send(
+                    'CTU',
+                    {
+                        'channel': chan.name,
+                        'character': char.name,
+                        'length': str(KILLS[char] * 10)
+                    }
+                )
+
+            KILLS_LAST[char] = int(time())
 
             return await SOCKET.send(
                 'CKU',
@@ -209,9 +233,7 @@ class Response:
                 (
                     'I am a [b]bot[/b] and not a real person.\n\n' +
                     'If you were kicked from [b]Anal Addicts[/b] by this ' +
-                    'bot, I would suggest not joining on this character ' +
-                    'again! We do not allow characters that present as or ' +
-                    'are -- in fact -- underaged!\n\nBe certain that your ' +
+                    'bot, be certain that your ' +
                     'character\'s [b]age[/b] and [b]visible age[/b] are ' +
                     'set to values and/or ranges that do not dip beneath 18 ' +
                     'years of age!'
