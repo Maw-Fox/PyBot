@@ -134,3 +134,4 @@ dmypy.json
 # PyBot
 creds.json
 testing.py
+moderation_log.json

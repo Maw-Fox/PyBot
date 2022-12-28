@@ -142,7 +142,7 @@ class Response:
 
         chan.add_char(char)
 
-        if not BOT_COMMANDS['yeetus'].state.get(chan.name):
+        if not BOT_COMMANDS['yeetus'].state.get(chan.name, True):
             return
 
         response = requests.post(
@@ -173,17 +173,17 @@ class Response:
             age = f'[{age}]' if bad_age else age
             vis = f'[{vis}]' if bad_vis else vis
 
-            ModLog(
-                channel=chan,
-                type='Age Restriction',
-                character=char,
-                reason=f'age: {age}, visual: {vis}'
-            )
-
             log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
             KILLS[char] = KILLS.get(char, 0) + 1
 
             if KILLS_LAST.get(char):
+                ModLog(
+                    channel=chan.name,
+                    type='Age Restriction, repeated',
+                    action=f'Timeout [{KILLS[char] * 10} minutes]',
+                    character=char.name,
+                    reason=f'age: {age}, visual: {vis}'
+                )
                 return SOCKET.send(
                     'CTU',
                     {
@@ -192,6 +192,14 @@ class Response:
                         'length': str(KILLS[char] * 10)
                     }
                 )
+
+            ModLog(
+                channel=chan.name,
+                type='Age Restriction',
+                action='Kick',
+                character=char.name,
+                reason=f'age: {age}, visual: {vis}'
+            )
 
             KILLS_LAST[char] = int(time())
 
@@ -371,8 +379,9 @@ def propagate_commands() -> None:
 
         for idx in range(amount):
             act: ModLog = logs[idx]
-            out_str += f'[b]{idx}:[/b] target: [b]{act.character.name}[/b]\n'
-            out_str += f'    type: [b]{act.type}[/b]\n'
+            out_str += f'[b]{idx}:[/b] target: [b]{act.character}[/b]\n'
+            out_str += f'    type: [i]{act.type}[/i]\n'
+            out_str += f'    action: [b]{act.action}[/b]\n'
             out_str += f'    reason: [i]{act.reason}[/i]\n'
 
         out_str = out_str[:len(out_str) - 1]
@@ -442,7 +451,7 @@ def propagate_commands() -> None:
         if not chan.is_op(char.name):
             return
 
-        NEW_STATE: bool = not BOT_COMMANDS['yeetus'].state.get(chan.name, None)
+        NEW_STATE: bool = not BOT_COMMANDS['yeetus'].state.get(chan.name, True)
         BOT_COMMANDS['yeetus'].state[chan.name] = NEW_STATE
 
         if NEW_STATE:

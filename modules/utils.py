@@ -103,4 +103,4 @@ def remove_all(character: Character) -> None:
 
 
 def get_logs(n_items: int = 10) -> list[ModLog]:
-    MOD_LOGS[:n_items]
+    return MOD_LOGS[:n_items]
