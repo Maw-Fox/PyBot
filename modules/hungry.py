@@ -51,7 +51,7 @@ class GameCharacter():
         # Every 5 levels of vit gets a per round +3 damage buffer/round.
         # Every 5 levels of vit gets +15 max hitpoints and +5 max stamina.
 
-        self.status_effects = dict[str, CharacterStatus] = {}
+        self.status_effects: dict[str, CharacterStatus] = {}
 
         self.hp: float = 1.0
         self.stamina: float = 1.0
@@ -74,15 +74,15 @@ class GameCharacter():
             self.abilities,
             self.__abilities
         )
-        delattr(self, '__abilities')
-        delattr(self, '__perks')
+        del self.__abilities
+        del self.__perks
         self.badge: str = badge
         self.has_badges: str = ''
 
     def build_perkbilities(self, cls, new_li: dict, li: dict[str, int]):
         for name in li:
             level: int = li[name]
-            perkbility: cls = cls(self, name, level)
+            perkbility: cls = cls(name=name, level=level, character=self)
             new_li[name] = perkbility
 
     def remove_perk(self, perk: str) -> None:
@@ -90,9 +90,9 @@ class GameCharacter():
 
     def add_perk(self, perk: str, level: int) -> None:
         perk_inst = CharacterPerk(
-            self,
-            perk,
-            level
+            name=perk,
+            level=level,
+            character=self
         )
         self.perks[perk] = perk_inst
 
@@ -130,7 +130,7 @@ class CharacterStatus:
         self.incapacitated: bool = incapacitated
         self.indefinite: bool = indefinite
         self.character: GameCharacter = character
-        self.modified: dict[str, int | float]
+        self.modified: dict[str, int | float] = {}
         for arg, value in kwargs.items():
             self.modified[arg] = value
             self.character.modifiers[arg] += value
@@ -315,9 +315,12 @@ class CharacterPerk:
         self.level: int = level
         self.character: GameCharacter = character
         self.modified: dict[str, int | float] = {}
+        CharacterPerk.perkiary[name]['setup'](self.level, self.modified)
         for modifier, value in self.modified.items():
             self.character.modifiers[modifier] += value
-        self.badge: str = CharacterAbility.abiliary[name].get('badge', '')
+        self.badge: str = CharacterPerk.perkiary[name].get('badge', '')
+        if not character.badge:
+            character.badge = self.badge
         character.has_badges += self.badge
 
     def remove(self) -> None:
@@ -515,7 +518,6 @@ class ThirstyCharacter(GameCharacter):
         badge: str = ''
     ):
         super().__init__(
-            self,
             name,
             level,
             strength,
@@ -535,7 +537,10 @@ class ThirstyCharacter(GameCharacter):
             'Pred',
             'You are pred and are at optimal strength!',
             99,
-            indefinite=True
+            indefinite=True,
+            mod_strength=-0.4,
+            mod_agility=-0.4,
+            mod_vitality=-0.4
         )
 
 
@@ -581,44 +586,36 @@ class Game:
                     badge=c['b']
                 )
 
-    @staticmethod
-    @default
-    def game_characters(_T):
-        raise NotImplementedError
-
-    @staticmethod
-    @game_characters.register
-    def game_characters() -> dict[str, GameCharacter]:
-        return Game.characters
-
-    @staticmethod
-    @game_characters.register
-    def game_characters(_T: GameCharacter) -> list[GameCharacter]:
-        return list(Game.characters.values())
-
-    @staticmethod
-    @game_characters.register
-    def game_characters(_T: str) -> list[str]:
-        return list(Game.characters.keys())
+    def game_characters(
+        self,
+        _T: None | GameCharacter | str = None
+    ) -> dict[str, GameCharacter] | list[GameCharacter] | list[str]:
+        if not _T:
+            return Game.characters
+        elif type(_T) == GameCharacter:
+            return list(Game.characters.values())
+        else:
+            return list(Game.characters.keys())
 
     @staticmethod
     def add_character(name: str, char: GameCharacter) -> None:
         Game.characters[name] = char
 
-    @staticmethod
     @default
-    def get_character(arg):
-        raise NotImplementedError
-
-    @staticmethod
-    @get_character.register
-    def get_character(id: str) -> GameCharacter:
-        pass
-
-    @staticmethod
-    @get_character.register
-    def get_character(ids: list[str]) -> list[ThirstyCharacter]:
-        pass
+    def get_character(
+        self,
+        _T: str | list[GameCharacter]
+    ) -> GameCharacter | list[GameCharacter] | None:
+        li: list[GameCharacter] = []
+        if type(_T) == str:
+            return Game.characters.get(id.lower(), None)
+        else:
+            for char_string in _T:
+                char: GameCharacter | None = Game.characters[char_string]
+                if not char:
+                    return None
+                li.append(char)
+            return li
 
 
 class Round:
@@ -648,6 +645,25 @@ class Round:
 
 
 class UI:
+    HP_WIDTH: int = 35
+
+    @staticmethod
+    def get_bar_str(hp: float) -> None:
+        out_str: str = '[color=green]'
+        orange_len: int = round(UI.HP_WIDTH * hp)
+        if hp == 1.0:
+            for idx in range(UI.HP_WIDTH):
+                out_str += '▰'
+            return f'{out_str}[/color]'
+
+        for idx in range(UI.HP_WIDTH):
+            if idx == orange_len - 3:
+                out_str += '[/color][color=orange]'
+            if idx == orange_len:
+                out_str += '[/color][color=red]'
+            out_str += '▰'
+        return f'{out_str}[/color]'
+
     @staticmethod
     def get_modified_stats(char: GameCharacter) -> dict[complex]:
         pass
@@ -655,3 +671,71 @@ class UI:
     @staticmethod
     def new() -> None:
         pass
+
+    @staticmethod
+    def get_processed(character: GameCharacter) -> dict[str, int]:
+        pass
+
+    @staticmethod
+    def sheet(
+        character: GameCharacter,
+        detailed: bool = False
+    ) -> str:
+        out_str: str = '\n'
+        mods = character.modifiers.copy()
+        print(mods)
+        vit: int = character.vitality
+        stre: int = character.strength
+        agi: int = character.agility
+
+        vit = floor(
+            (vit + mods['add_vitality']) *
+            mods['mod_vitality']
+        )
+        stre = floor(
+            (stre + mods['add_strength']) *
+            mods['mod_strength']
+        )
+        agi = floor(
+            (vit + mods['add_agility']) *
+            mods['mod_agility']
+        )
+        max_hp: int = floor(
+            (
+                character.modifiers.get('add_hp_max', 0) +
+                100 + floor(vit / 5) * 15
+            ) *
+            character.modifiers.get('mod_hp_max', 1)
+        )
+        max_stamina: int = floor(
+            (
+                character.modifiers.get('add_stamina_max', 0) +
+                100 + floor(vit / 5) * 5
+            ) *
+            character.modifiers.get('mod_stamina_max', 1)
+        )
+        out_str += (
+            f'{character.badge}' +
+            f'[user]{character.display_name}[/user][color=white][b]\'s ' +
+            'Character Sheet[/b][/color]\n' +
+            '[color=green][b]HP[/b][/color] ' +
+            f'[color=white]{max_hp}[/color]/[color=white][b]{max_hp}[/b]' +
+            '[/color]\n' +
+            f'{UI.get_bar_str(character.hp)}\n' +
+            f'{UI.get_bar_str(character.stamina)}\n' +
+            f'[color=red][b]STA[/b][/color][color=white] {max_stamina}/[b]' +
+            f'{max_stamina}[/b][/color]\n' +
+            '[color=white][b]STATS:[/b] [sup](modified)[/sup][/color]\n' +
+            f'[color=white]   [b]Strength[/b]: {stre}[/color]\n' +
+            f'[color=white]   [b]Agility[/b]: {agi}[/color]\n' +
+            f'[color=white]   [b]Vitality[/b]: {vit}[/color]\n'
+        )
+
+        return out_str
+
+
+kali = GameCharacter('Kali')
+kali.add_perk('raid boss', 10)
+kali.add_perk('developer', 1)
+kali.add_perk('veteran', 6)
+print(UI.sheet(kali))

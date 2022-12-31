@@ -422,6 +422,7 @@ class Parser:
                 'type': str,
             }
         ],
+        'create': [],
         'action': [
             {
                 'name': 'action',
@@ -529,8 +530,38 @@ class Parser:
 
 
 class Command:
+    create_help: str = (
+        '[b]Hungry Game[/b] A command to begin to character creation ' +
+        'process.'
+    )
+
+    @staticmethod
+    async def create(
+        by: Character,
+        **kwargs
+    ) -> None:
+        output: Output = Output(
+            recipient=by
+        )
+        char: H.GameCharacter = H.Game.get_character(by.name)
+
+        if char:
+            return await output.send(
+                '[b]Error[/b]: Already have a character under this name!'
+            )
+
+        char = H.GameCharacter = H.GameCharacter(
+            name=by.name
+        )
+        out_str: str = H.UI.sheet(character=char, detailed=True)
+        return await output.send(
+            f'{out_str}\nYou have created a new character for ' +
+            '[b]Hungry Game[/b]!\nIn order to allocate points ' +
+            'and read the rules, check the "[i]!help[/i] hungry" command!'
+        )
+
     buy_help: str = (
-        '[b]HungryGame[/b]: A command to spend [i]perk points[/i], ' +
+        '[b]Hungry Game[/b]: A command to spend [i]perk points[/i], ' +
         '[i]ability points[/i] and [i]stat points[/i].\n' +
         '[b]Usage[/b]:\n' +
         '"[i]!buy perk 4 rage-fueled[/i]": buy [i]4 levels[/i] of a ' +
