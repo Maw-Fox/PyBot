@@ -4,7 +4,8 @@ import requests
 import os
 import re
 
-from time import time, asctime, localtime
+import modules.hungry as H
+from time import time
 from math import floor
 from websockets.client import connect
 from functools import singledispatch as default
@@ -14,7 +15,6 @@ from modules.channel import Channel
 from modules.character import Character
 from modules.utils import log, age_tester, get_char, get_chan, remove_all
 from modules.queue import Queue
-from modules.commands import BotCommand, BOT_COMMANDS
 from modules.shared import UPTIME, COMMAND_TIMEOUT
 from modules.log import ModLog, MOD_LOGS
 
@@ -27,7 +27,7 @@ KILLS: dict[Character, int] = {}
 KILLS_LAST: dict[Character, int] = {}
 CHECK: dict[str, int] = {
     'last': 1,
-    'every': 60,
+    'every': 300,
     'clear': 300
 }
 
@@ -91,7 +91,7 @@ class Socket:
                             CHECK['last'] = t
                             for char in KILLS_LAST.copy():
                                 ts: int = KILLS_LAST[char]
-                                if t - ts > CHECK['clear']:
+                                if ts < t - CHECK['clear']:
                                     KILLS_LAST.pop(char)
                     await self.read(code, data)
                 except Exception as error:
@@ -158,7 +158,7 @@ class Response:
 
         chan.add_char(char)
 
-        if not BOT_COMMANDS['yeetus'].state.get(chan.name, True):
+        if not chan.states.get('yeetus', True):
             return
 
         response = requests.post(
@@ -285,6 +285,9 @@ class Response:
         output: Output = Output(channel=chan)
 
         if message[:1] != '!':
+            return
+
+        if not getattr(Command, (message[1:].split(' ')[0])):
             return
 
         message = message[1:]
@@ -526,9 +529,100 @@ class Parser:
 
 
 class Command:
-    states: dict = {
-        'yeeted': 0
-    }
+    buy_help: str = (
+        '[b]HungryGame[/b]: A command to spend [i]perk points[/i], ' +
+        '[i]ability points[/i] and [i]stat points[/i].\n' +
+        '[b]Usage[/b]:\n' +
+        '"[i]!buy perk 4 rage-fueled[/i]": buy [i]4 levels[/i] of a ' +
+        '[i]perk[/i] called [b]rage-fueled[/b]"\n' +
+        '"[i]!buy stat 10 strength[/i]": buy [i]10 points[/i] of the ' +
+        '[b]strength[/b] [i]stat[/i]\n' +
+        '"[i]!buy ability heal[/i]": buy [i]1 level[/i] of the [/b]heal[/b] ' +
+        '[i]ability[/i].'
+    )
+
+    @staticmethod
+    async def buy(
+        upgrade: str,
+        by: Character,
+        selection: str,
+        amount: int = 1,
+        **kwargs
+    ) -> None:
+        output: Output = Output(
+            recipient=by
+        )
+        upgrade: str = upgrade.lower()
+        selection: str = selection.lower()
+        char_name: str = by.name
+        char: H.GameCharacter = H.Game.get_character(char_name)
+        valid_stat: dict[str, bool] = {
+            'strength': True,
+            'agility': True,
+            'vitality': True
+        }
+
+        if upgrade == 'stat':
+            if not valid_stat.get(selection):
+                return await output.send(
+                    '[b]Error[/b]: No such stat exists.'
+                )
+            if amount > char.stat_alloc:
+                return await output.send(
+                    '[b]Error[/b]: You do not have enough stat points to ' +
+                    f'allocate {amount} stat points. Have: ' +
+                    f'{char.stat_alloc}.'
+                )
+            stat: int = getattr(char, selection)
+            setattr(
+                char,
+                selection,
+                stat + amount
+            )
+            char.stat_alloc -= amount
+            return await output.send(
+                u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
+            )
+        elif upgrade == 'perk':
+            current_perk: H.CharacterPerk = char.perks.get(selection)
+            name: str = selection
+            selection: dict = H.CharacterPerk.perkiary.get(selection)
+            level: int = 0
+            if not selection:
+                return await output.send(
+                    '[b]Error[/b]: No such perk exists.'
+                )
+            if not selection.get('cost'):
+                return await output.send(
+                    '[b]Error[/b]: Perk is not purchasable.'
+                )
+            cost: int = selection.get('cost') * amount
+            if cost > char.perk_alloc:
+                return await output.send(
+                    '[b]Error[/b]: You do not have enough perk points to ' +
+                    f'allocate {amount} stat points. Have: ' +
+                    f'{char.perk_alloc}.'
+                )
+            if current_perk:
+                level = current_perk.level
+                if current_perk.level + amount > selection.get('max_level'):
+                    return await output.send(
+                        '[b]Error[/b]: Amount of levels to purchase over ' +
+                        'the perk\'s max level.'
+                    )
+                char.remove_perk(name)
+            char.add_perk(name, level + amount)
+            char.perk_alloc -= cost
+            return await output.send(
+                u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
+            )
+        else:
+            if amount > char.ability_alloc:
+                return await output.send(
+                    '[b]Error[/b]: You do not have enough ability points to ' +
+                    f'allocate {amount} stat points. Have: ' +
+                    f'{char.perk_alloc}.'
+                )
 
     logs_help: str = 'A log of moderation actions that the bot has taken.'
 

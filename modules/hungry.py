@@ -1,7 +1,7 @@
 import json
-import re
+from random import random
 from time import time
-from math import floor
+from math import floor, ceil
 from functools import singledispatch as default
 from os import path
 
@@ -9,14 +9,10 @@ LAST_SNAPSHOT: int = int(time())
 SNAPSHOT_DELAY: int = 300
 
 
-class HungryUI:
+class UI:
     @staticmethod
     def new() -> None:
         pass
-
-
-class CharacterAbility:
-    pass
 
 
 class CharacterStatus:
@@ -24,18 +20,18 @@ class CharacterStatus:
         self,
         name: str,
         description: str,
-        level: int,
         duration: int,
-        cb,
+        cb: None | function = None,
+        level: int = 0,
         add_hp: int = 0,
         mod_hp: float = 0,
         add_max_hp: int = 0,
         mod_max_hp: float = 0,
         add_stamina: int = 0,
         add_stamina_max: int = 0,
-        add_strength: int = 0,
-        add_agility: int = 0,
-        add_vitality: int = 0,
+        add_strength: int = 4,
+        add_agility: int = 4,
+        add_vitality: int = 4,
         mod_strength: float = 1.0,
         mod_agility: float = 1.0,
         mod_vitality: float = 1.0,
@@ -76,10 +72,10 @@ class GameCharacter():
         self,
         name: str,
         level: int = 1,
-        strength: int = 4,
-        agility: int = 4,
-        vitality: int = 4,
-        stat_alloc: int = 0,
+        strength: int = 0,
+        agility: int = 0,
+        vitality: int = 0,
+        stat_alloc: int = 10,
         perk_alloc: int = 0,
         ability_alloc: int = 0,
         wins: list[dict[str, list]] = [],
@@ -117,25 +113,38 @@ class GameCharacter():
         # Every 5 levels of vit gets +15 max hitpoints and +5 max stamina.
 
         self.status_effects = dict[str, CharacterStatus] = {}
-        self.abilities = dict[str, CharacterAbility] = {}
 
         self.__perks: dict[str, int] = __perks
-        self.perks: list[CharacterPerk] = []
+        self.perks: dict[str, CharacterPerk] = {}
         self.build_perkbilities(CharacterPerk, self.perks, self.__perks)
         self.__abilities: dict[str, int] = __abilities
-        self.abilities: list[CharacterAbility] = []
+        self.abilities: dict[str, CharacterAbility] = {}
         self.build_perkbilities(
             CharacterAbility,
             self.abilities,
             self.__abilities
         )
+        delattr(self, '__abilities')
+        delattr(self, '__perks')
         self.badge: str = badge
+        self.has_badges: str = ''
 
-    def build_perkbilities(self, cls, new_li: list, li: dict[str, int]):
+    def build_perkbilities(self, cls, new_li: dict, li: dict[str, int]):
         for name in li:
             level: int = li[name]
             perkbility: cls = cls(self, name, level)
-            new_li.append(perkbility)
+            new_li[name] = perkbility
+
+    def remove_perk(self, perk: str) -> None:
+        self.perks.pop(perk)
+
+    def add_perk(self, perk: str, level: int) -> None:
+        perk_inst = CharacterPerk(
+            self,
+            perk,
+            level
+        )
+        self.perks[perk] = perk_inst
 
     def update_cooldowns(self) -> None:
         for name in self.abilities:
@@ -148,6 +157,21 @@ class GameCharacter():
             status: CharacterStatus = self.status_effects[name]
             if status.duration == 1:
                 self.status_effects.pop(name)
+
+    def add_status(
+        self,
+        name: str,
+        description: str,
+        duration: int,
+        **kwargs
+    ) -> None:
+        status: CharacterStatus = CharacterStatus(
+            name,
+            description,
+            duration,
+            **kwargs
+        )
+        self.status_effects[name] = status
 
 
 class Passive:
@@ -287,7 +311,95 @@ class CharacterPerk:
         self.level = level
         self.fn = CharacterPerk.perkiary[name]['fn']
         if CharacterPerk.perkiary[name].get('badge'):
-            char.badges += CharacterPerk.perkiary[name]['badge']
+            char.has_badge += CharacterPerk.perkiary[name]['badge']
+
+
+class Ability:
+    """
+    Active-type abilities.
+    """
+
+    """
+    Attack
+    Max: 10
+    Every level reduces stamina cost of attacking by 5%.
+    Starter
+    """
+    @staticmethod
+    def attack(level: int, ref: dict) -> None:
+        ref['ability'] = 'attack'
+        ref['add_stamina'] -= ceil((1 - (0.05 * (level - 1))) * 30)
+
+    """
+    Heal ability
+    base heal: 5
+    base roll: 2d4
+    Every level adds 1d4 to heal.
+    Max level: 10
+    Starter
+    """
+    @staticmethod
+    def heal(level: int, ref: dict) -> None:
+        ref['ability'] = 'heal'
+        ref['add_heal'] += floor(level * 4 * random()) + level + 2
+        ref['add_stamina'] -= 25
+
+    """
+    Rest ability
+    Regenerate stamina for ability use 2x
+    Max level: 10
+    Each level increases efficiency by 5%.
+    Starter
+    """
+    def rest(level: int, ref: dict) -> None:
+        ref['ability'] = 'rest'
+        ref['add_stamina'] += ceil(40 * (1 + ((level - 1) * 0.05)))
+
+    """
+    Defend ability
+    Regenerate stamina + block incoming damage.
+    Max level: 10
+    Each level increases stamina regeneration by 5%
+    Each second level increases damage reduction by 2
+    Each second level increases damage buffer by 2
+    Starter
+    """
+    def defend(level: int, ref: dict) -> None:
+        ref['ability'] = 'defend'
+        ref['add_stamina'] += ceil(20 * (1 + ((level - 1) * 0.05)))
+        ref['add_damage_reduction'] += floor((level - 1) * 2)
+        ref['add_damage_buffer'] += floor((level - 1) * 2)
+
+
+class CharacterAbility:
+    # Perk database, stores data including method pointer.
+    abiliary: dict[str, dict] = {
+        'attack': {
+            'level': 1,
+            'max_level': 1,
+            'fn': Ability.attack
+        },
+        'heal': {
+            'level': 1,
+            'max_level': 10,
+            'fn': Ability.heal
+        },
+        'rest': {
+            'level': 1,
+            'max_level': 5,
+            'fn': Ability.rest
+        },
+        'defend': {
+            'level': 1,
+            'max_level': 5,
+            'fn': Ability.defend
+        }
+    }
+
+    def __init__(self, char: GameCharacter, name: str, level: int) -> None:
+        self.name = name
+        self.level = level
+        self.fn = CharacterAbility.abiliary[name]['fn']
 
 
 # Increases stat allocation points per level.
@@ -297,17 +409,47 @@ class CharacterPerk:
 # lose 1 level if they lose to both prey, for a maximum of no penalty
 # if the predator managed to finish off a prey,
 # Defeating multiple prey gives the standard +1 level per prey.
-# Maximum allocated stat points will be 70.
-# Every 3 levels = 1 perk point.
+# Maximum allocated stat points will be 60.
+# Every 2 levels = 1 perk point.
+# Every 4 levels = 1 ability point.
 class HungryCharacter(GameCharacter):
     def __init__(
         self,
+        name: str,
         level: int = 1,
-        stats_allocated: int = 0,
-        pp_allocated: int = 0
+        strength: int = 4,
+        agility: int = 4,
+        vitality: int = 4,
+        stat_alloc: int = 0,
+        perk_alloc: int = 0,
+        ability_alloc: int = 0,
+        wins: list[dict[str, list]] = [],
+        losses: list[dict[str, list]] = [],
+        __perks: dict[str, int] = {},
+        __abilities: dict[str, int] = {},
+        badge: str = ''
     ):
-        self.stat_alloc: int = max(10 + level - stats_allocated, 0)
-        self.perk_alloc: int = floor(level / 3) - pp_allocated
+        super().__init__(
+            self,
+            name,
+            level,
+            strength,
+            agility,
+            vitality,
+            stat_alloc,
+            perk_alloc,
+            ability_alloc,
+            wins,
+            losses,
+            __perks,
+            __abilities,
+            badge
+        )
+        self.add_status(
+            'Pred',
+            'You are pred and are at optimal strength!',
+            99
+        )
 
 
 # Increases stat allocation points per level.
@@ -316,41 +458,56 @@ class HungryCharacter(GameCharacter):
 # Prey that team up to take on a single predator at a time
 # will lose 2 levels if they fall, if they both fall then
 # both will lose 3 levels each.
-# Maximum allocated stat points will be 70.
-# Every 3 levels = 1 perk point.
+# Maximum allocated stat points will be 60.
+# Every 2 levels = 1 perk point.
+# Every 4 levels = 1 ability point.
 class ThirstyCharacter(GameCharacter):
     def __init__(
         self,
+        name: str,
         level: int = 1,
-        stats_allocated: int = 0,
-        pp_allocated: int = 0
+        strength: int = 4,
+        agility: int = 4,
+        vitality: int = 4,
+        stat_alloc: int = 0,
+        perk_alloc: int = 0,
+        ability_alloc: int = 0,
+        wins: list[dict[str, list]] = [],
+        losses: list[dict[str, list]] = [],
+        __perks: dict[str, int] = {},
+        __abilities: dict[str, int] = {},
+        badge: str = ''
     ):
-        self.stat_alloc: int = max(5 + level - stats_allocated, 0)
-        self.perk_alloc: int = floor(level / 3) - pp_allocated
+        super().__init__(
+            self,
+            name,
+            level,
+            strength,
+            agility,
+            vitality,
+            stat_alloc,
+            perk_alloc,
+            ability_alloc,
+            wins,
+            losses,
+            __perks,
+            __abilities,
+            badge
+        )
+        self.add_status(
+            'Prey',
+            (
+                'You are prey and at an innate disadvantage, you are capped ' +
+                'at 60% of your overall ability.'
+            ),
+            99,
+            add_strength=-1 * floor(self.strength * 0.6),
+            add_agility=-1 * floor(self.agility * 0.6),
+            add_vitality=-1 * floor(self.vitality * 0.6)
+        )
 
 
-class Helper:
-    """
-    Helper namespace for helper functions.
-    """
-
-    @staticmethod
-    @default
-    def get_character(arg):
-        raise NotImplementedError
-
-    @staticmethod
-    @get_character.register
-    def get_character(id: str) -> GameCharacter:
-        pass
-
-    @staticmethod
-    @get_character.register
-    def get_character(ids: list[str]) -> list[ThirstyCharacter]:
-        pass
-
-
-class HungryGame:
+class Game:
     characters: dict[str, GameCharacter] = {}
 
     def __init__(
@@ -360,8 +517,8 @@ class HungryGame:
         channel: str,
         challenger: HungryCharacter | ThirstyCharacter
     ):
-        pred_character: HungryCharacter = Helper.get_character(pred)
-        prey_characters: HungryCharacter = Helper.get_character(prey)
+        pred_character: HungryCharacter = Game.get_character(pred)
+        prey_characters: HungryCharacter = Game.get_character(prey)
         self.pred: HungryCharacter = pred_character
         self.prey: list[ThirstyCharacter] = prey_characters
         self.channel: str = channel
@@ -376,7 +533,7 @@ class HungryGame:
 
             for name in cdata:
                 c = cdata[name]
-                HungryGame.characters[name.lower()] = GameCharacter(
+                Game.characters[name.lower()] = GameCharacter(
                     name=c['n'],
                     level=c['lv'],
                     strength=c['s'],
@@ -400,21 +557,36 @@ class HungryGame:
     @staticmethod
     @game_characters.register
     def game_characters() -> dict[str, GameCharacter]:
-        return HungryGame.characters
+        return Game.characters
 
     @staticmethod
     @game_characters.register
     def game_characters(_T: GameCharacter) -> list[GameCharacter]:
-        return list(HungryGame.characters.values())
+        return list(Game.characters.values())
 
     @staticmethod
     @game_characters.register
     def game_characters(_T: str) -> list[str]:
-        return list(HungryGame.characters.keys())
+        return list(Game.characters.keys())
 
     @staticmethod
     def add_character(name: str, char: GameCharacter) -> None:
-        HungryGame.characters[name] = char
+        Game.characters[name] = char
+
+    @staticmethod
+    @default
+    def get_character(arg):
+        raise NotImplementedError
+
+    @staticmethod
+    @get_character.register
+    def get_character(id: str) -> GameCharacter:
+        pass
+
+    @staticmethod
+    @get_character.register
+    def get_character(ids: list[str]) -> list[ThirstyCharacter]:
+        pass
 
 
 class Round:
