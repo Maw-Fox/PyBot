@@ -2,10 +2,12 @@ import asyncio
 import json
 import requests
 import os
+import re
 
-from time import time
+from time import time, asctime, localtime
 from math import floor
 from websockets.client import connect
+from functools import singledispatch as default
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.channel import Channel
@@ -87,7 +89,7 @@ class Socket:
                         AUTH.check_ticket()
                         if t - CHECK['last'] > CHECK['every']:
                             CHECK['last'] = t
-                            for char in KILLS_LAST:
+                            for char in KILLS_LAST.copy():
                                 ts: int = KILLS_LAST[char]
                                 if t - ts > CHECK['clear']:
                                     KILLS_LAST.pop(char)
@@ -97,6 +99,20 @@ class Socket:
 
     async def close(self) -> None:
         await self.current.close()
+
+
+def get_time_str(t: int) -> str:
+    time_diff: int = int(time()) - t
+    time_days: int = floor(time_diff / 86400)
+    time_hours: int = floor((time_diff % 86400) / 3600)
+    time_minutes: int = floor((time_diff % 3600) / 60)
+    time_seconds: int = floor(time_diff % 60)
+    time_string: str = ''
+    time_string += f'{time_days} day(s), ' if time_days else ''
+    time_string += f'{time_hours} hour(s), ' if time_hours else ''
+    time_string += f'{time_minutes} minute(s), ' if time_minutes else ''
+    time_string += f'{time_seconds} second(s), ' if time_seconds else ''
+    return time_string[:len(time_string) - 2]
 
 
 class Response:
@@ -182,14 +198,15 @@ class Response:
                     type='Age Restriction, repeated',
                     action=f'Timeout [{KILLS[char] * 10} minutes]',
                     character=char.name,
-                    reason=f'age: {age}, visual: {vis}'
+                    reason=f'age: {age}, visual: {vis}',
+                    at=int(time())
                 )
-                return SOCKET.send(
+                return await SOCKET.send(
                     'CTU',
                     {
                         'channel': chan.name,
                         'character': char.name,
-                        'length': str(KILLS[char] * 10)
+                        'length': str((KILLS[char] - 1) * 10)
                     }
                 )
 
@@ -198,7 +215,8 @@ class Response:
                 type='Age Restriction',
                 action='Kick',
                 character=char.name,
-                reason=f'age: {age}, visual: {vis}'
+                reason=f'age: {age}, visual: {vis}',
+                at=int(time())
             )
 
             KILLS_LAST[char] = int(time())
@@ -247,28 +265,18 @@ class Response:
                     'years of age!'
                 )
             )
-
-        exploded: list[str] = message[1:].split(' ')
-        command: str = exploded[0]
-        args: str = ''
-
-        if len(exploded) > 1:
-            exploded.pop(0)
-            args = ' '.join(exploded)
-
-        extras = {
-            'params': args,
-            'from': char.name,
-            'channel': ''
-        }
-
-        if not BOT_COMMANDS.get(command):
+        parameters = Parser.parse(
+            message=message,
+            by=char
+        )
+        if parameters['error']:
             return await output.send(
-                f'Unknown command "[b]{command}[/b]", type \'[i]!help[/i]\' ',
-                'for a list of commands.'
+                '[b]Error[/b]: ' + parameters['error']
             )
-
-        await BOT_COMMANDS.get(command).solver(extras, output)
+        await getattr(Command, parameters['command'])(
+            output=output,
+            **parameters
+        )
 
     async def MSG(data) -> None:
         message: str = data['message']
@@ -279,24 +287,21 @@ class Response:
         if message[:1] != '!':
             return
 
-        exploded: list[str] = message[1:].split(' ')
-        command: str = exploded[0]
-        args: str = ''
+        message = message[1:]
 
-        if len(exploded) > 1:
-            exploded.pop(0)
-            args = ' '.join(exploded)
-
-        extras = {
-            'params': args,
-            'from': char.name,
-            'channel': chan.name
-        }
-
-        if not BOT_COMMANDS.get(command):
-            return
-
-        await BOT_COMMANDS.get(command).solver(extras, output)
+        parameters = Parser.parse(
+            message=message,
+            by=char,
+            chan=chan
+        )
+        if (parameters['error']):
+            return await output.send(
+                '[b]Error[/b]: ' + parameters['error']
+            )
+        await getattr(Command, parameters['command'])(
+            output=output,
+            **parameters
+        )
 
 
 SOCKET: Socket = Socket()
@@ -353,25 +358,191 @@ class Output:
         await SOCKET.send(f'PIN')
 
 
-def build_params(args) -> tuple[Output, Character, Channel | None]:
-    char: Character = get_char(args['from'])
-    chan: Channel | None = None
-    if args['channel']:
-        chan = get_chan(args['channel'])
-        output: Output = Output(channel=chan)
-    else:
-        output: Output = Output(recipient=char)
-    return (output, char, chan)
+class Parser:
+    templates: dict[str, str | list[dict[str, complex]]] = {
+        'buy': [
+            {
+                'name': 'upgrade',
+                'type': str,
+                'one_of': {
+                    'perk': 1,
+                    'stat': 1,
+                    'ability': 1
+                }
+            },
+            {
+                'name': 'amount',
+                'type': int,
+                'optional': True
+            },
+            {
+                'name': 'selection',
+                'type': str,
+                'multi': True
+            },
+        ],
+        'challenge': [
+            {
+                'name': 'character',
+                'type': list,
+                'multi': True
+            }
+        ],
+        'help': [
+            {
+                'name': 'sub_command',
+                'type': str
+            }
+        ],
+        'badge': [
+            {
+                'name': 'badge',
+                'type': str,
+                'multi': True
+            }
+        ],
+        'sheet': [
+            {
+                'name': 'character',
+                'type': str,
+                'last': True
+            }
+        ],
+        'target': [
+            {
+                'name': 'character',
+                'type': str,
+                'last': False
+            },
+            {
+                'name': 'ability',
+                'type': str,
+            }
+        ],
+        'action': [
+            {
+                'name': 'action',
+                'type': str
+            }
+        ],
+        'yeetus': '',
+        'yeeted': '',
+        'logs': [
+            {
+                'name': 'amount',
+                'type': int,
+                'optional': True
+            }
+        ]
+    }
+
+    @staticmethod
+    async def __parse(
+        message: str
+    ) -> bool | dict[str, str | list[str]]:
+        exploded: list[str] = message.split(' ')
+        command: str = exploded.pop(0)
+        template: list = Parser.templates.get(command)
+        built_args: dict[str, str | list[str]] = {
+            'command': command
+        }
+        if not template:
+            built_args['error'] = 'Unrecognized command.'
+            return built_args
+        while True:
+            try:
+                exploded.remove('')
+            except ValueError:
+                break
+        for idx in range(len(template)):
+            buffer: str = ' '.join(exploded)
+            arg: dict = template[idx]
+            name: str = arg.get('name')
+            T = arg.get('type')
+            if not buffer and not arg.get('optional'):
+                built_args['error'] = (
+                    'Missing required parameter "' +
+                    arg.name + '".'
+                )
+                return built_args
+            if arg.get('one of'):
+                expects: list = arg.get('one of')
+                first: str = exploded[0].lower()
+                if not expects[first] and not arg.get('optional'):
+                    built_args['error'] = (
+                        f'Invalid argument "{name}", ' +
+                        'must be one of: ' + ', '.join(expects) + '.'
+                    )
+                    return built_args
+                built_args[name] = first
+            if arg.get('multi'):
+                if T == list:
+                    exploded = re.split('[ ]?,[ ]?', buffer)
+                    built_args[name] = exploded
+                    break
+                built_args[name] = buffer
+                break
+            if T == int and arg.get('optional'):
+                if re.match('^[0-9]+$', exploded[0]):
+                    built_args[name] = T(exploded.pop(0))
+                continue
+            if name == 'character':
+                if arg.get('last'):
+                    built_args[name] = buffer
+                    break
+                exploded = re.split('[ ]?,[ ]?', buffer)
+                character: str = exploded.pop(0)
+                built_args[name] = character
+                continue
+            built_args[name] = exploded.pop(0)
+        return built_args
+
+    @staticmethod
+    @default
+    async def parse(_T):
+        raise NotImplemented
+
+    @staticmethod
+    @parse.register
+    async def parse(
+        message: str,
+        by: Character
+    ) -> complex:
+        built = Parser.__parse(message)
+        built['by'] = by
+        return built
+
+    @staticmethod
+    @parse.register
+    async def parse(
+        message: str,
+        by: Character,
+        chan: Channel
+    ) -> complex:
+        built = Parser.__parse(message)
+        built['by'] = by
+        built['channel'] = chan
+        return built
 
 
-def propagate_commands() -> None:
-    async def logs(args, output: Output) -> None:
-        amount: int = int(args['params']) if args['params'] else 10
-        output, char, chan = build_params(args)
+class Command:
+    states: dict = {
+        'yeeted': 0
+    }
+
+    logs_help: str = 'A log of moderation actions that the bot has taken.'
+
+    @staticmethod
+    async def logs(
+        amount: int,
+        output: Output,
+        by: Character,
+        **kwargs
+    ) -> None:
         chan: Channel = get_chan('ADH-04ef230936a847d576fa')
-        out_str: str = ''
+        out_str: str = '[spoiler]'
 
-        if not chan.is_op(char.name):
+        if not chan.is_op(by.name):
             return
 
         logs: list[ModLog] = MOD_LOGS[:amount]
@@ -379,36 +550,31 @@ def propagate_commands() -> None:
 
         for idx in range(amount):
             act: ModLog = logs[idx]
-            out_str += f'[b]{idx}:[/b] target: [b]{act.character}[/b]\n'
-            out_str += f'    type: [i]{act.type}[/i]\n'
+            out_str += f'[b]{idx}:[/b] target: [user]{act.character}[/user]\n'
+            out_str += f'    type: [b]{act.type}[/b]\n'
             out_str += f'    action: [b]{act.action}[/b]\n'
+            out_str += f'    when: [i]{get_time_str(act.at)} ago[/i]\n'
             out_str += f'    reason: [i]{act.reason}[/i]\n'
 
-        out_str = out_str[:len(out_str) - 1]
+        out_str = out_str[:len(out_str) - 1] + '[/spoiler]'
 
         await output.send(
             (
-                f'Log for the last [b]{amount}[/b] of moderation actions:\n' +
+                f'Log for the last [b]{amount}[/b] moderation actions:\n' +
                 out_str
             )
         )
 
-    BotCommand(
-        'logs',
-        logs,
-        'A log of moderation actions that the bot has taken.'
-    )
+    yeeted_help: str = 'Let me show you my kill count. >:3~'
 
-    async def yeeted(args, output: Output) -> None:
-        chan: Channel = output.channel
-        current_time: int = int(time())
-        time_last: int = BOT_COMMANDS['yeeted'].state.get('l', 0)
+    @staticmethod
+    async def yeeted(
+        chan: Channel,
+        output: Output,
+        **kwargs
+    ) -> None:
+        time_last: int = chan.states.get('last', 0)
         time_diff_state: int = int(time()) - time_last
-        time_diff: int = current_time - UPTIME
-        time_days: int = floor(time_diff / 86400)
-        time_hours: int = floor((time_diff % 86400) / 3600)
-        time_minutes: int = floor((time_diff % 3600) / 60)
-        time_seconds: int = floor(time_diff % 60)
 
         unique_kills: int = len(KILLS.keys())
         kills: int = sum(KILLS.values())
@@ -416,14 +582,10 @@ def propagate_commands() -> None:
         if not chan or time_diff_state < COMMAND_TIMEOUT:
             return
 
-        BOT_COMMANDS['yeeted'].state['l'] = int(time())
+        chan.states['last'] = int(time())
 
         time_string: str = 'within the last [i]'
-        time_string += f'{time_days} day(s), ' if time_days else ''
-        time_string += f'{time_hours} hour(s), ' if time_hours else ''
-        time_string += f'{time_minutes} minute(s), ' if time_minutes else ''
-        time_string += f'{time_seconds} second(s), ' if time_seconds else ''
-        time_string = time_string[:len(time_string) - 2]
+        time_string += get_time_str(UPTIME)
         time_string += '.[/i] [sup]:>~[/sup]'
 
         await output.send(
@@ -434,111 +596,34 @@ def propagate_commands() -> None:
             )
         )
 
-    BotCommand(
-        'yeeted',
-        yeeted,
-        'Let me show you my kill count. >:3~',
-        state=0
-    )
+    yeetus_help: str = 'Gotta protect the kids from themselves. :>~'
 
-    async def yeetus(args, output: Output) -> None:
-        char: Character = get_char(args['from'])
-        chan: Channel = get_chan(args['channel'])
+    @staticmethod
+    async def yeetus(
+        by: Character,
+        chan: Channel,
+        output: Output
+    ) -> None:
 
         if not chan:
             return
 
-        if not chan.is_op(char.name):
+        if not chan.is_op(by.name):
             return
 
-        NEW_STATE: bool = not BOT_COMMANDS['yeetus'].state.get(chan.name, True)
-        BOT_COMMANDS['yeetus'].state[chan.name] = NEW_STATE
+        NEW_STATE: bool = not chan.states.get('yeetus', True)
+        chan.states['yeetus'] = NEW_STATE
 
         if NEW_STATE:
             await output.send(
-                f'You got it, [b]{char.name}[/b]!' +
+                f'You got it, [b]{by.name}[/b]!' +
                 ' Yeet mode [i]engaged[/i].'
             )
         else:
             await output.send(
-                f'You got it, [b]{char.name}[/b]!' +
+                f'You got it, [b]{by.name}[/b]!' +
                 ' Yeet mode [i]disengaged[/i].'
             )
-
-    BotCommand(
-        'yeetus',
-        yeetus,
-        'Gotta protect the kids from themselves. :>~',
-        state={}
-    )
-
-    """
-    async def help(args) -> None:
-        output = get_output(args)
-        params: str = args['params']
-        out_str = '[b]List of available commands:[/b]\n'
-
-        if not params:
-            for cmd_name in BOT_COMMANDS:
-                command = BOT_COMMANDS[cmd_name]
-                out_str += f'[i]{command.command_name}[/i],'
-
-            out_str = out_str[:len(out_str) - 1]
-            return await output.send(out_str)
-
-        params: list[str] = get_params(params, 1)
-        subcommand: str = params[0]
-
-        if not hasattr(BOT_COMMANDS, args.subcommand):
-            return await output.send(out_str)
-
-        await output.send(
-            BOT_COMMANDS[subcommand].help
-        )
-
-    BotCommand(
-        'help',
-        help,
-        cat(
-            'Insert witty joke about recursion here, or the fact I can no ',
-            'longer actually help you if you need help about the help ',
-            'function itself. :>~'
-        )
-    )
-
-    async def die(args) -> None:
-        output = get_output(args)
-        by: str = args['from']
-        print('ding')
-        if by != 'Kali':
-            return await output.send(
-                'No u. :>~\n[color=red][b]A C C E S S   D E N I E D',
-                '[/b][/color]'
-            )
-
-        await output.send(
-            '/me dies. [sub]X>~[/sub]'
-        )
-        system.exit(1)
-
-    BotCommand(
-        'die',
-        die,
-        'Kill the bot. Before you event try: [b]no[/b], you can\'t. :>~'
-    )
-
-    async def hp(args) -> None:
-        output = get_output(args)
-
-    BotCommand(
-        'hp',
-        hp,
-        'HP bar formatter.'
-    )
-    """
-
-
-propagate_commands()
 
 
 async def main() -> None:

@@ -89,7 +89,7 @@ def age_tester(test_me: str) -> bool:
 
 
 def get_char(character: str) -> Character | None:
-    return GLOBAL_CHARACTER_LIST.get(character, None)
+    return GLOBAL_CHARACTER_LIST.get(character, Character(character))
 
 
 def get_chan(channel: str) -> Channel | None:

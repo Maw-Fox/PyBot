@@ -11,6 +11,7 @@ class Channel:
         self.characters: dict[str, Character] = {}
         self.ops: dict[str, int] = {}
         CHANNELS[self.name] = self
+        self.states: dict[str, complex] = {}
 
     def remove_char(self, character: Character) -> None:
         if not self.characters.get(character):

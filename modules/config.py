@@ -50,9 +50,9 @@ def do_crypt(phrase: str, pw: str, forward: bool = True, _t='sha512') -> bytes:
 
 
 def get_config() -> dict[str, str | int]:
-    if os.path.exists('config.json'):
+    if os.path.exists('data/config.json'):
         file = open(
-            'config.json',
+            'data/config.json',
             'r',
             encoding='UTF-8'
         )
@@ -66,7 +66,7 @@ def get_credentials() -> dict[str, str]:
         if not ARGS.skip_phrase:
             passphrase = input('Set a passphrase (leave empty to skip):')
             if passphrase:
-                f = open('creds.json', 'w', encoding='UTF-8')
+                f = open('data/creds.json', 'w', encoding='UTF-8')
                 f.write(json.dumps(
                     {
                         'username': ARGS.username,
@@ -79,10 +79,10 @@ def get_credentials() -> dict[str, str]:
             'username': ARGS.username,
             'password': ARGS.password
         }
-    if os.path.exists('creds.json'):
+    if os.path.exists('data/creds.json'):
         passphrase = input('passphrase:')
         f = open(
-            'creds.json',
+            'data/creds.json',
             'r',
             encoding='UTF-8'
         )
@@ -103,7 +103,7 @@ def get_credentials() -> dict[str, str]:
         if not username or not password:
             system.exit('Password or account name is invalid, aborting...')
         if passphrase:
-            f = open('creds.json', 'w', encoding='UTF-8')
+            f = open('data/creds.json', 'w', encoding='UTF-8')
             f.write(
                 json.dumps(
                     {
