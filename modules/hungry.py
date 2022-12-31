@@ -9,72 +9,14 @@ LAST_SNAPSHOT: int = int(time())
 SNAPSHOT_DELAY: int = 300
 
 
-class UI:
-    @staticmethod
-    def new() -> None:
-        pass
-
-
-class CharacterStatus:
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        duration: int,
-        cb: None | function = None,
-        level: int = 0,
-        add_hp: int = 0,
-        mod_hp: float = 0,
-        add_max_hp: int = 0,
-        mod_max_hp: float = 0,
-        add_stamina: int = 0,
-        add_stamina_max: int = 0,
-        add_strength: int = 4,
-        add_agility: int = 4,
-        add_vitality: int = 4,
-        mod_strength: float = 1.0,
-        mod_agility: float = 1.0,
-        mod_vitality: float = 1.0,
-        mod_damage: float = 1.0,
-        mod_heal: float = 1.0,
-        add_damage_reduction: int = 0,
-        add_damage_buffer: int = 0,
-        incapacitated: bool = True,
-        indefinite: bool = False
-    ):
-        self.name: str = name
-        self.description: str = description
-        self.level: int = level
-        self.duration: int = duration
-        self.cb = cb
-        self.add_hp: int = add_hp
-        self.mod_hp: float = mod_hp
-        self.add_max_hp: int = add_max_hp
-        self.mod_max_hp: float = mod_max_hp
-        self.add_stamina: int = add_stamina
-        self.add_stamina_max: int = add_stamina_max
-        self.add_strength: int = add_strength
-        self.add_agility: int = add_agility
-        self.add_vitality: int = add_vitality
-        self.mod_strength: float = mod_strength
-        self.mod_agility: float = mod_agility
-        self.mod_vitalit: float = mod_vitality
-        self.mod_damage: float = mod_damage
-        self.mod_heal: float = mod_heal
-        self.add_damage_reduction: int = add_damage_reduction
-        self.add_damage_buffer: int = add_damage_buffer
-        self.incapacitated: bool = incapacitated
-        self.indefinite: bool = indefinite
-
-
 class GameCharacter():
     def __init__(
         self,
         name: str,
         level: int = 1,
-        strength: int = 0,
-        agility: int = 0,
-        vitality: int = 0,
+        strength: int = 4,
+        agility: int = 4,
+        vitality: int = 4,
         stat_alloc: int = 10,
         perk_alloc: int = 0,
         ability_alloc: int = 0,
@@ -87,16 +29,13 @@ class GameCharacter():
         self.display_name: str = name
         self.name: str = name.lower()
         self.level: int = level
-        self.hp: int = 100
-        self.max_hp: int = 100
-        self.stamina: int = 100
-        self.max_stamina: int = 100
         self.wins: list[dict[str, list]] = wins
         self.losses: list[dict[str, list]] = losses
         self.in_game: bool = False
         self.stat_alloc: int = stat_alloc
         self.perk_alloc: int = perk_alloc
         self.ability_alloc: int = ability_alloc
+
         self.strength: int = strength
         # Every 10 levels of str gives +3 to modifier.
         # Every 3 levels gives +2 to die.
@@ -113,6 +52,17 @@ class GameCharacter():
         # Every 5 levels of vit gets +15 max hitpoints and +5 max stamina.
 
         self.status_effects = dict[str, CharacterStatus] = {}
+
+        self.hp: float = 1.0
+        self.stamina: float = 1.0
+
+        self.modifiers = Modifier.template.copy()
+
+        self.ability_modifiers = Modifier.template.copy()
+        self.ability_modifiers.update(Modifier.template_ability)
+
+        self.deceased: bool = False
+        self.incapacitated: bool = False
 
         self.__perks: dict[str, int] = __perks
         self.perks: dict[str, CharacterPerk] = {}
@@ -158,20 +108,69 @@ class GameCharacter():
             if status.duration == 1:
                 self.status_effects.pop(name)
 
-    def add_status(
+
+class CharacterStatus:
+    def __init__(
         self,
+        character: GameCharacter,
         name: str,
         description: str,
         duration: int,
+        level: int = 1,
+        incapacitated: bool = False,
+        deceased: bool = False,
+        indefinite: bool = False,
         **kwargs
-    ) -> None:
-        status: CharacterStatus = CharacterStatus(
-            name,
-            description,
-            duration,
-            **kwargs
-        )
-        self.status_effects[name] = status
+    ):
+        self.name: str = name
+        self.description: str = description
+        self.level: int = level
+        self.duration: int = duration
+        self.deceased: bool = deceased
+        self.incapacitated: bool = incapacitated
+        self.indefinite: bool = indefinite
+        self.character: GameCharacter = character
+        self.modified: dict[str, int | float]
+        for arg, value in kwargs.items():
+            self.modified[arg] = value
+            self.character.modifiers[arg] += value
+
+    def remove(self) -> None:
+        for modifier, value in self.modified.items():
+            self.character.modifiers[modifier] -= value
+
+
+class Modifier:
+    template: dict[str, int | float] = {
+            'add_hp': 0,
+            'mod_hp': 1.0,
+            'add_max_hp': 0,
+            'mod_max_hp': 1.0,
+            'add_stamina': 0,
+            'mod_stamina': 1.0,
+            'add_stamina_max': 0,
+            'mod_stamina_max': 1.0,
+            'add_strength': 0,
+            'mod_strength': 1.0,
+            'add_agility': 0,
+            'mod_agility': 1.0,
+            'add_vitality': 0,
+            'mod_vitality': 1.0,
+            'mod_damage': 1.0,
+            'add_heal': 0,
+            'mod_heal': 1.0,
+            'add_damage_reduction': 0,
+            'add_damage_buffer': 0,
+            'mod_damage_buffer': 1.0,
+            'add_damage': 0,
+            'mod_damage': 1.0
+    }
+    template_ability: dict[str, int | float] = {
+        'attacking': 0,
+        'healing': 0,
+        'resting': 0,
+        'defending': 0
+    }
 
 
 class Passive:
@@ -187,9 +186,9 @@ class Passive:
     """
     @staticmethod
     def veteran(level: int, ref: dict) -> None:
-        ref['add_strength'] += level
-        ref['add_agility'] += floor(0.5 * level)
-        ref['add_vitality'] += floor(1 / 3 * level)
+        ref['add_strength'] = level
+        ref['add_agility'] = floor(0.5 * level)
+        ref['add_vitality'] = floor(1 / 3 * level)
 
     """
     Acheivement Perk, unlocked by reaching milestones.
@@ -199,17 +198,17 @@ class Passive:
     """
     @staticmethod
     def raid_boss(level: int, ref: dict) -> None:
-        ref['add_strength'] += floor(0.4 * level)
-        ref['add_agility'] += floor(0.4 * level)
-        ref['add_vitality'] += level
+        ref['add_strength'] = floor(0.4 * level)
+        ref['add_agility'] = floor(0.4 * level)
+        ref['add_vitality'] = level
 
     """
     Acheivement Perk, unlocked by cursing yourself with being a programmer.
     """
     @staticmethod
     def developer(level: int, ref: dict) -> None:
-        ref['add_strength'] += -2
-        ref['add_vitality'] += 2
+        ref['add_strength'] = -2
+        ref['add_vitality'] = 2
 
     """
     Acheivement Perk, unlocked by winning numerous times as prey.
@@ -219,8 +218,8 @@ class Passive:
     """
     @staticmethod
     def hard_to_digest(level: int, ref: dict) -> None:
-        ref['add_vitality'] += level
-        ref['add_damage_reduction'] += 1 + level
+        ref['add_vitality'] = level
+        ref['add_damage_reduction'] = 1 + level
 
     """
     Acheivement Perk, unlocked by being prey party's MVP healer 5 times.
@@ -230,7 +229,7 @@ class Passive:
     """
     @staticmethod
     def best_friend(level: int, ref: dict) -> None:
-        ref['mod_heal'] += level * 0.08
+        ref['mod_heal'] = level * 0.08
 
     """
     Purchased Perk, requires level 6.
@@ -240,9 +239,9 @@ class Passive:
     """
     @staticmethod
     def rage_fueled(level: int, ref: int) -> None:
-        ref['mod_strength'] += level * 0.1
-        ref['mod_agility'] += level * 0.1
-        ref['mod_vitality'] += level * -0.1
+        ref['mod_strength'] = level * 0.1
+        ref['mod_agility'] = level * 0.1
+        ref['mod_vitality'] = level * -0.1
 
     """
     Purchased Perk, requires level 6.
@@ -252,9 +251,9 @@ class Passive:
     """
     @staticmethod
     def stalwart(level: int, ref: dict) -> None:
-        ref['mod_strength'] += level * -0.1
-        ref['mod_agility'] += level * 0.1
-        ref['mod_vitality'] += level * 0.1
+        ref['mod_strength'] = level * -0.1
+        ref['mod_agility'] = level * 0.1
+        ref['mod_vitality'] = level * 0.1
 
 
 class CharacterPerk:
@@ -263,62 +262,70 @@ class CharacterPerk:
         'developer': {
             'level': 1,
             'max_level': 1,
-            'fn': Passive.developer,
+            'setup': Passive.developer,
             'badge': u'\U0001f6e0'
         },
         'raid boss': {
             'level': 1,
             'max_level': 10,
-            'fn': Passive.raid_boss,
+            'setup': Passive.raid_boss,
             'badge': u'\U0001f480'
         },
         'veteran': {
             'level': 1,
             'max_level': 6,
-            'fn': Passive.veteran,
+            'setup': Passive.veteran,
             'badge': u'\u2694'
         },
         'hard to digest': {
             'level': 1,
             'max_level': 6,
-            'fn': Passive.hard_to_digest,
+            'setup': Passive.hard_to_digest,
             'badge': u'\u26a0'
         },
         'best friend': {
             'level': 1,
             'max_level': 10,
-            'fn': Passive.best_friend,
+            'setup': Passive.best_friend,
             'badge': u'\u26e8'
         },
         'rage-fueled': {
             'level': 1,
             'max_level': 4,
-            'fn': Passive.rage_fueled,
+            'setup': Passive.rage_fueled,
             'costs': 2,
             'requires': 6
         },
         'stalwart': {
             'level': 1,
             'max_level': 4,
-            'fn': Passive.stalwart,
+            'setup': Passive.stalwart,
             'costs': 2,
             'requires': 6
         }
     }
 
-    def __init__(self, char: GameCharacter, name: str, level: int):
-        self.name = name
-        self.level = level
-        self.fn = CharacterPerk.perkiary[name]['fn']
-        if CharacterPerk.perkiary[name].get('badge'):
-            char.has_badge += CharacterPerk.perkiary[name]['badge']
+    def __init__(
+        self,
+        name: str,
+        level: int,
+        character: GameCharacter
+    ) -> None:
+        self.name: str = name
+        self.level: int = level
+        self.character: GameCharacter = character
+        self.modified: dict[str, int | float] = {}
+        for modifier, value in self.modified.items():
+            self.character.modifiers[modifier] += value
+        self.badge: str = CharacterAbility.abiliary[name].get('badge', '')
+        character.has_badges += self.badge
+
+    def remove(self) -> None:
+        for modifier, value in self.modified.items():
+            self.character.modifiers[modifier] -= value
 
 
 class Ability:
-    """
-    Active-type abilities.
-    """
-
     """
     Attack
     Max: 10
@@ -326,9 +333,9 @@ class Ability:
     Starter
     """
     @staticmethod
-    def attack(level: int, ref: dict) -> None:
-        ref['ability'] = 'attack'
-        ref['add_stamina'] -= ceil((1 - (0.05 * (level - 1))) * 30)
+    def attack(level: int, ref: dict[str, int | float]) -> None:
+        ref['attacking'] = 1
+        ref['add_stamina'] = ceil((1 - (0.05 * (level - 1))) * 30)
 
     """
     Heal ability
@@ -339,9 +346,9 @@ class Ability:
     Starter
     """
     @staticmethod
-    def heal(level: int, ref: dict) -> None:
-        ref['ability'] = 'heal'
-        ref['add_heal'] += floor(level * 4 * random()) + level + 2
+    def heal(level: int, ref: dict[str, int | float]) -> None:
+        ref['healing'] = 1
+        ref['add_heal'] = floor(level * 4 * random()) + level + 2
         ref['add_stamina'] -= 25
 
     """
@@ -351,9 +358,9 @@ class Ability:
     Each level increases efficiency by 5%.
     Starter
     """
-    def rest(level: int, ref: dict) -> None:
-        ref['ability'] = 'rest'
-        ref['add_stamina'] += ceil(40 * (1 + ((level - 1) * 0.05)))
+    def rest(level: int, ref: dict[str, int | float]) -> None:
+        ref['resting'] = 1
+        ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.05)))
 
     """
     Defend ability
@@ -364,11 +371,11 @@ class Ability:
     Each second level increases damage buffer by 2
     Starter
     """
-    def defend(level: int, ref: dict) -> None:
-        ref['ability'] = 'defend'
-        ref['add_stamina'] += ceil(20 * (1 + ((level - 1) * 0.05)))
-        ref['add_damage_reduction'] += floor((level - 1) * 2)
-        ref['add_damage_buffer'] += floor((level - 1) * 2)
+    def defend(level: int, ref: dict[str, int | float]) -> None:
+        ref['defending'] = 1
+        ref['add_stamina'] = ceil(20 * (1 + ((level - 1) * 0.05)))
+        ref['add_damage_reduction'] = floor((level - 1) * 2)
+        ref['add_damage_buffer'] = floor((level - 1) * 2)
 
 
 class CharacterAbility:
@@ -377,29 +384,56 @@ class CharacterAbility:
         'attack': {
             'level': 1,
             'max_level': 1,
-            'fn': Ability.attack
+            'setup': Ability.attack,
+            'cost': 2,
+            'targetted': False
         },
         'heal': {
             'level': 1,
             'max_level': 10,
-            'fn': Ability.heal
+            'setup': Ability.heal,
+            'cost': 2,
+            'targetted': True
         },
         'rest': {
             'level': 1,
             'max_level': 5,
-            'fn': Ability.rest
+            'setup': Ability.rest,
+            'cost': 2,
+            'targetted': False
         },
         'defend': {
             'level': 1,
             'max_level': 5,
-            'fn': Ability.defend
+            'setup': Ability.defend,
+            'cost': 2,
+            'targetted': False
         }
     }
 
-    def __init__(self, char: GameCharacter, name: str, level: int) -> None:
-        self.name = name
-        self.level = level
-        self.fn = CharacterAbility.abiliary[name]['fn']
+    def __init__(
+        self,
+        name: str,
+        level: int,
+        character: GameCharacter
+    ) -> None:
+        self.name: str = name
+        self.level: int = level
+        self.character: GameCharacter = character
+        self.modified: dict[str, int | float] = {}
+
+    def remove(self) -> None:
+        for modifier, value in self.modified.items():
+            self.character.ability_modifiers[modifier] -= value
+
+    def use_ability(self) -> None:
+        self.remove()
+        self.modified = {}
+        CharacterAbility.abiliary[self.name]['setup'](
+            self.level, self.modified
+        )
+        for modifier, value in self.modified.items():
+            self.character.ability_modifiers[modifier] += value
 
 
 # Increases stat allocation points per level.
@@ -445,10 +479,12 @@ class HungryCharacter(GameCharacter):
             __abilities,
             badge
         )
-        self.add_status(
+        self.status_effects['Pred'] = CharacterStatus(
+            self,
             'Pred',
             'You are pred and are at optimal strength!',
-            99
+            99,
+            indefinite=True
         )
 
 
@@ -494,16 +530,12 @@ class ThirstyCharacter(GameCharacter):
             __abilities,
             badge
         )
-        self.add_status(
-            'Prey',
-            (
-                'You are prey and at an innate disadvantage, you are capped ' +
-                'at 60% of your overall ability.'
-            ),
+        self.status_effects['Prey'] = CharacterStatus(
+            self,
+            'Pred',
+            'You are pred and are at optimal strength!',
             99,
-            add_strength=-1 * floor(self.strength * 0.6),
-            add_agility=-1 * floor(self.agility * 0.6),
-            add_vitality=-1 * floor(self.vitality * 0.6)
+            indefinite=True
         )
 
 
@@ -612,4 +644,14 @@ class Round:
 
     def end_turn(self) -> None:
         # Set the chosen action in stone, cycle to next or calculate round.
+        pass
+
+
+class UI:
+    @staticmethod
+    def get_modified_stats(char: GameCharacter) -> dict[complex]:
+        pass
+
+    @staticmethod
+    def new() -> None:
         pass
