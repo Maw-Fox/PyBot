@@ -425,8 +425,8 @@ class Parser:
                 'type': str
             }
         ],
-        'yeetus': '',
-        'yeeted': '',
+        'yeetus': [],
+        'yeeted': [],
         'logs': [
             {
                 'name': 'amount',
