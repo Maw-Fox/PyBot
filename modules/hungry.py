@@ -96,6 +96,17 @@ class GameCharacter():
         )
         self.perks[perk] = perk_inst
 
+    def remove_ability(self, ability: str) -> None:
+        self.abilities.pop(ability)
+
+    def add_ability(self, ability: str, level: int) -> None:
+        ability_inst = CharacterAbility(
+            name=ability,
+            level=level,
+            character=self
+        )
+        self.abilities[ability] = ability_inst
+
     def update_cooldowns(self) -> None:
         for name in self.abilities:
             ability: CharacterAbility = self.abilities[name]
@@ -361,6 +372,7 @@ class Ability:
     Each level increases efficiency by 5%.
     Starter
     """
+    @staticmethod
     def rest(level: int, ref: dict[str, int | float]) -> None:
         ref['resting'] = 1
         ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.05)))
@@ -374,6 +386,7 @@ class Ability:
     Each second level increases damage buffer by 2
     Starter
     """
+    @staticmethod
     def defend(level: int, ref: dict[str, int | float]) -> None:
         ref['defending'] = 1
         ref['add_stamina'] = ceil(20 * (1 + ((level - 1) * 0.05)))
@@ -586,8 +599,8 @@ class Game:
                     badge=c['b']
                 )
 
+    @staticmethod
     def game_characters(
-        self,
         _T: None | GameCharacter | str = None
     ) -> dict[str, GameCharacter] | list[GameCharacter] | list[str]:
         if not _T:
@@ -601,9 +614,8 @@ class Game:
     def add_character(name: str, char: GameCharacter) -> None:
         Game.characters[name] = char
 
-    @default
+    @staticmethod
     def get_character(
-        self,
         _T: str | list[GameCharacter]
     ) -> GameCharacter | list[GameCharacter] | None:
         li: list[GameCharacter] = []
@@ -665,77 +677,71 @@ class UI:
         return f'{out_str}[/color]'
 
     @staticmethod
-    def get_modified_stats(char: GameCharacter) -> dict[complex]:
-        pass
-
-    @staticmethod
-    def new() -> None:
-        pass
-
-    @staticmethod
-    def get_processed(character: GameCharacter) -> dict[str, int]:
-        pass
-
-    @staticmethod
     def sheet(
         character: GameCharacter,
         detailed: bool = False
     ) -> str:
-        out_str: str = '\n'
+        o_s: str = '\n'
+        c_n: str = character.display_name
+        c_l: int = character.level
+        c_hp: float = character.hp
+        c_st: float = character.stamina
         mods = character.modifiers.copy()
-        print(mods)
-        vit: int = character.vitality
-        stre: int = character.strength
-        agi: int = character.agility
-
-        vit = floor(
-            (vit + mods['add_vitality']) *
-            mods['mod_vitality']
+        s: int = character.strength
+        a: int = character.agility
+        v: int = character.vitality
+        b: str = character.badge
+        bs: str = '   '.join([x for x in character.has_badges])
+        s = floor((s + mods['add_strength']) * mods['mod_strength'])
+        a = floor((a + mods['add_agility']) * mods['mod_agility'])
+        v = floor((v + mods['add_vitality']) * mods['mod_vitality'])
+        a_hp_m: int = character.modifiers.get('add_hp_max', 0)
+        m_hp_m: float = character.modifiers.get('mod_hp_max', 1.0)
+        a_st_m: int = character.modifiers.get('add_stamina_max', 0)
+        m_st_m: float = character.modifiers.get('mod_stamina_max', 1.0)
+        m_hp: int = floor((a_hp_m + 100 + floor(v / 5) * 15) * m_hp_m)
+        m_st: int = floor((a_st_m + 100 + floor(v / 5) * 5) * m_st_m)
+        d: int = (1 + floor((floor(a / 5) * 20) / 100) + floor(a / 15))
+        c: int = (30 + floor(a / 5) * 20) % 100
+        f: int = 8 + floor(s / 3) * 2
+        m: int = floor(s / 10) * 3
+        e: int = floor(a / 10) * 6
+        dr: int = floor(v / 10) * 2
+        db: int = floor(v / 5) * 3
+        o_s += (
+            f'{b}[user]{c_n}[/user] LVL:{c_l} STR:{s} AGI:{a} VIT:{v}\n' +
+            f'[color=green]HP[/color] {round(m_hp * c_hp)}/{m_hp}\n'
+            f'{UI.get_bar_str(c_hp)}\n' +
+            f'{UI.get_bar_str(c_st)}\n' +
+            f'[color=red]STA[/color] {round(m_st * c_st)}/{m_st}'
         )
-        stre = floor(
-            (stre + mods['add_strength']) *
-            mods['mod_strength']
-        )
-        agi = floor(
-            (vit + mods['add_agility']) *
-            mods['mod_agility']
-        )
-        max_hp: int = floor(
-            (
-                character.modifiers.get('add_hp_max', 0) +
-                100 + floor(vit / 5) * 15
-            ) *
-            character.modifiers.get('mod_hp_max', 1)
-        )
-        max_stamina: int = floor(
-            (
-                character.modifiers.get('add_stamina_max', 0) +
-                100 + floor(vit / 5) * 5
-            ) *
-            character.modifiers.get('mod_stamina_max', 1)
-        )
-        out_str += (
-            f'{character.badge}' +
-            f'[user]{character.display_name}[/user][color=white][b]\'s ' +
-            'Character Sheet[/b][/color]\n' +
-            '[color=green][b]HP[/b][/color] ' +
-            f'[color=white]{max_hp}[/color]/[color=white][b]{max_hp}[/b]' +
-            '[/color]\n' +
-            f'{UI.get_bar_str(character.hp)}\n' +
-            f'{UI.get_bar_str(character.stamina)}\n' +
-            f'[color=red][b]STA[/b][/color][color=white] {max_stamina}/[b]' +
-            f'{max_stamina}[/b][/color]\n' +
-            '[color=white][b]STATS:[/b] [sup](modified)[/sup][/color]\n' +
-            f'[color=white]   [b]Strength[/b]: {stre}[/color]\n' +
-            f'[color=white]   [b]Agility[/b]: {agi}[/color]\n' +
-            f'[color=white]   [b]Vitality[/b]: {vit}[/color]\n'
-        )
-
-        return out_str
+        if b:
+            o_s += f'\n{bs}'
+        if detailed:
+            o_s += (
+                f'\nATTACK ROLL: {d}d{f} + {m}' +
+                f'\nCRIT%:{c} EVADE%:{e} DR: {dr} DB: {db}'
+            )
+        if b and detailed:
+            o_s += '\n[b]ACHEIVEMENTS:[/b]'
+            for name, perk in character.perks.items():
+                if not perk.perkiary.get(name).get('cost'):
+                    perk_obj: dict[str, complex] = perk.perkiary.get(name)
+                    badge: str = perk_obj.get('badge')
+                    max_level: int = perk_obj.get('max_level')
+                    o_s += (
+                        f'\n{badge}   {name.upper()}: {perk.level}/' +
+                        f'{max_level}'
+                    )
+        return o_s
 
 
-kali = GameCharacter('Kali')
+kali = ThirstyCharacter('Kali')
+kali.level = 60
+kali.strength += 20
+kali.vitality += 30
+kali.agility += 20
 kali.add_perk('raid boss', 10)
 kali.add_perk('developer', 1)
 kali.add_perk('veteran', 6)
-print(UI.sheet(kali))
+print(UI.sheet(kali, detailed=True))

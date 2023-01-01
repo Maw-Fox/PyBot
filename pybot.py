@@ -502,34 +502,108 @@ class Parser:
         return built_args
 
     @staticmethod
-    @default
-    async def parse(_T):
-        raise NotImplemented
-
-    @staticmethod
-    @parse.register
-    async def parse(
-        message: str,
-        by: Character
-    ) -> complex:
-        built = Parser.__parse(message)
-        built['by'] = by
-        return built
-
-    @staticmethod
-    @parse.register
     async def parse(
         message: str,
         by: Character,
-        chan: Channel
+        chan: Channel | None = None
     ) -> complex:
         built = Parser.__parse(message)
         built['by'] = by
-        built['channel'] = chan
+        if chan:
+            built['channel'] = chan
         return built
 
 
 class Command:
+    hungry_help: str = (
+        '[b]Hungry Game[/b]: A brief explainer of the game mechanics:\n' +
+        'Think of [b]Hungry Game[/b] as a RPG-lite focused around ' +
+        'vore, though it can easily be utilized for general fighting ' +
+        'scenes similarly. If there is adequate desire to generalize it, ' +
+        'I\'d be more than happy to adjust [b]Hungry Game[/b] to encompass ' +
+        'that.\n\n' +
+        '[b]Hungry Game[/b] is meant to not be a game in and of itself, but ' +
+        'rather a supporting asset to control the flow of an RP. Sometimes ' +
+        'you get surprised and things don\'t go your way. Inversely ' +
+        'there are times where things go unexpectedly well! ' +
+        'The sky is the limit really! This is just a fancy ' +
+        'dice game without the pain of having to explain the rules to ' +
+        'everyone in the party, and how to handle rolling. [b]Hungry ' +
+        'Game[/b] looks to trivialize this experience and allow more ' +
+        'people the ability to get into incorporating external ' +
+        'systems into their RP.\n\n' +
+        '[b]Stats:[/b]\n' +
+        '[i]Stats are exactly what they say on the tin below. Stats are a ' +
+        'very generic way of making your character stronger. They do ' +
+        'not progress linearly like a lot of RPGs, but rather ' +
+        'they unlock certain bonuses in multiple different level ' +
+        'intervals. This means stat milestones come with very large ' +
+        'bonuses that you can [b]really feel[/b]! Rather than a slow ' +
+        'and steady progression that feels unrewarding.[/i]\n' +
+        '   [b]Strength:[/b]\n' +
+        '       [i]Base attack roll: 1d8 + 0[/i]' +
+        '       Every 3 levels of strength gives +2 to ' +
+        'die faces. Example: 1d8 -> 1d10.\n' +
+        '       Every 10 levels of strength gives +3 to ' +
+        'your damage modifier. Example: 1d8 + 0 -> ' +
+        '1d8 + 3.\n'
+        '   [b]Agility:[/b]\n' +
+        '       [i]Base crit chance is 30%, crit adds ' +
+        '+1 die to a roll. Base evasion is 0%. Evading an attack ' +
+        'negates all incoming damage[/i].\n'
+        '       Every 5 levels of agility gives +20% crit chance.\n' +
+        '       Every 10 levels of agility increases evasion ' +
+        'chance by %6.\n' +
+        '       Every 15 levels of agility gives you +1 die to your attack ' +
+        ' rolls.\n' +
+        '   [b]Vitality:[/b]\n' +
+        '       [i]Base HP/Stamina is 100, base damage reduction is 0 and ' +
+        'base damage buffer is also 0.[/i]\n' +
+        '       Every 5 levels of vitality causes you to gain an extra +3 ' +
+        'damage buffer that resets per round. Example: You have two ' +
+        'incoming attacks for 2 damage, but you have 3 damage buffer. ' +
+        'You take a total of 1 damage, as 3 was absorbed by your buffer.\n' +
+        '       Every 5 levels of vit also nets you +15 HP/+5 stamina.\n' +
+        '       Every 10 levels of vit adds +2 damage reduction to your \n' +
+        'character. Example: Just like before, 2x2 damage attacks are ' +
+        'incoming, but your 2 damage reduction causes you to take ' +
+        '[b]no damage[/b]. This is particularly useful in [b]Hungry ' +
+        'Game[/b] because the game allows numerous people to ' +
+        'fight at once. At the moment the limit is 1 pred vs 1-5 prey.\n\n'
+        '   [b]Perks/Abilities/Status Effects:[/b]\n' +
+        '       Perks and abilities can be gained both by spending their ' +
+        'respective points you earn upon character progression (leveling).\n' +
+        '       Every 2 levels gives you 1 perk point, every 4 levels ' +
+        'nets you an ability point.\n' +
+        '       You gain levels by winning in combat, however it\'s not an ' +
+        ' EXP system like most RPGs. Winning as pred nets you 1 level; ' +
+        'However, losing as pred loses you 2 levels. Winning as prey ' +
+        'nets you 2 levels, and you only lose 1 level for a loss. Prey ' +
+        'are naturally at a disadvantage in this game and suffer a ' +
+        'status effect that causes them to only act at 60% efficiency. ' +
+        'This means an equal-level predator against a single prey ' +
+        'has a very, very high chance at winning.\n' +
+        '       You can find out more about perks and abilities by ' +
+        'using the "[i]!perks[/i]" and "[i]!abilities[/i] commands ' +
+        'respectively.\n' +
+        '       Some perks are unable to be purchased via the "[i]!buy[/i]" ' +
+        'command, but require your character to progress to milestones ' +
+        'or acheivements. For instance: a level of the "raid boss" ' +
+        'perk is gained each time you defeat 5 prey as a single pred in ' +
+        'a 1v5 game. These bonuses are often rather substantial given ' +
+        'the luck necessary to earn them. Hidden/acheivement perks also ' +
+        'give you "badges" badges show up next to your character name ' +
+        'within the [b]Hungry Game[/b] and you can set which badge you ' +
+        'want to display with "[i]!badge[/i]" command. All badge unlocks ' +
+        'will show up under your character "[i]!sheet[/i]".\n\n' +
+        '"[/i]!sheet[/i]" is a very important command to show you ' +
+        'your character progression, current stat points/perk points/' +
+        'ability points that you currently can spend.\n\n' +
+        'Well, that about sums it up, hope you enjoy the game!\n' +
+        'If you have anymore questions or concerns, please contact ' +
+        '[user]Kali[/user], the developer/creator of this game and bot!'
+    )
+
     create_help: str = (
         '[b]Hungry Game[/b] A command to begin to character creation ' +
         'process.'
@@ -564,15 +638,41 @@ class Command:
         '[b]Hungry Game[/b]: A command to spend [i]perk points[/i], ' +
         '[i]ability points[/i] and [i]stat points[/i].\n' +
         '[b]Usage[/b]:\n' +
-        '"[i]!buy perk 4 rage-fueled[/i]": buy [i]4 levels[/i] of a ' +
+        '   "[i]!buy perk 4 rage-fueled[/i]": buy [i]4 levels[/i] of a ' +
         '[i]perk[/i] called [b]rage-fueled[/b]"\n' +
-        '"[i]!buy stat 10 strength[/i]": buy [i]10 points[/i] of the ' +
+        '   "[i]!buy stat 10 strength[/i]": buy [i]10 points[/i] of the ' +
         '[b]strength[/b] [i]stat[/i]\n' +
-        '"[i]!buy ability heal[/i]": buy [i]1 level[/i] of the [/b]heal[/b] ' +
-        '[i]ability[/i].'
+        '   "[i]!buy ability heal[/i]": buy [i]1 level[/i] of the ' +
+        '[/b]heal[/b] [i]ability[/i].'
     )
 
     @staticmethod
+    async def help(
+        sub_command: str,
+        by: Character,
+        **kwargs
+    ) -> None:
+        output: Output = Output(recipient=by)
+        help: str = getattr(Command, f'{sub_command.lower()}_help')
+        if not help:
+            return await output.send(
+
+            )
+
+    help_help: str = (
+        '[b]Help:[/b] a list off commands are below, type "!help command" ' +
+        'to see more information regarding these commands.\n' +
+        '   [b]General:[/b]\n   ' +
+        '   '.join([
+            'logs', 'yeetus', 'yeeted', '[b]help[/b]'
+        ]) + '\n'
+        '   [b]Hungry Game:[/b]\n   ' +
+        '   '.join([
+            'hungry', 'create', 'buy', 'target', 'badge', 'challenge', 'sheet',
+            'action'
+        ]) + '\n'
+    )
+
     async def buy(
         upgrade: str,
         by: Character,
@@ -631,7 +731,7 @@ class Command:
             if cost > char.perk_alloc:
                 return await output.send(
                     '[b]Error[/b]: You do not have enough perk points to ' +
-                    f'allocate {amount} stat points. Have: ' +
+                    f'allocate {amount} perk points. Have: ' +
                     f'{char.perk_alloc}.'
                 )
             if current_perk:
@@ -648,12 +748,38 @@ class Command:
                 u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
             )
         else:
-            if amount > char.ability_alloc:
+            current_ability: H.CharacterAbility = char.abilities.get(selection)
+            name: str = selection
+            selection: dict = H.CharacterAbility.abiliary.get(selection)
+            level: int = 0
+            if not selection:
+                return await output.send(
+                    '[b]Error[/b]: No such ability exists.'
+                )
+            if not selection.get('cost'):
+                return await output.send(
+                    '[b]Error[/b]: Ability is not purchasable.'
+                )
+            cost: int = selection.get('cost') * amount
+            if cost > char.ability_alloc:
                 return await output.send(
                     '[b]Error[/b]: You do not have enough ability points to ' +
-                    f'allocate {amount} stat points. Have: ' +
-                    f'{char.perk_alloc}.'
+                    f'allocate {amount} ability points. Have: ' +
+                    f'{char.ability_alloc}.'
                 )
+            if current_ability:
+                level = current_ability.level
+                if current_ability.level + amount > selection.get('max_level'):
+                    return await output.send(
+                        '[b]Error[/b]: Amount of levels to purchase over ' +
+                        'the ability\'s max level.'
+                    )
+                char.remove_ability(name)
+            char.add_ability(name, level + amount)
+            char.ability_alloc -= cost
+            return await output.send(
+                u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
+            )
 
     logs_help: str = 'A log of moderation actions that the bot has taken.'
 
