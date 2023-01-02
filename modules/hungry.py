@@ -8,6 +8,18 @@ from os import path
 LAST_SNAPSHOT: int = int(time())
 SNAPSHOT_DELAY: int = 300
 
+DOC: dict[str, dict[str, complex]] = {}
+
+
+def load_doc() -> None:
+    f = open('hungry_doc.json', 'r', encoding='utf-8')
+    obj: dict[str, dict[str, complex]] = json.load(f)
+    for name in obj:
+        DOC[name] = obj[name]
+
+
+load_doc()
+
 
 class GameCharacter():
     def __init__(
@@ -35,35 +47,17 @@ class GameCharacter():
         self.stat_alloc: int = stat_alloc
         self.perk_alloc: int = perk_alloc
         self.ability_alloc: int = ability_alloc
-
         self.strength: int = strength
-        # Every 10 levels of str gives +3 to modifier.
-        # Every 3 levels gives +2 to die.
-
         self.agility: int = agility
-        # Every 15 levels of agi gets an extra roll.
-        # Every 5  levels of agi gives +20% chance to crit (add +1 dice)
-        # Every 10 levels of agi increases chance to evade an attack by 6%
-        # Base crit is 30%.
-
         self.vitality: int = vitality
-        # Every 10 levels of vit gets +2 flat DR, that reduces EVERY attack
-        # Every 5 levels of vit gets a per round +3 damage buffer/round.
-        # Every 5 levels of vit gets +15 max hitpoints and +5 max stamina.
-
         self.status_effects: dict[str, CharacterStatus] = {}
-
         self.hp: float = 1.0
         self.stamina: float = 1.0
-
         self.modifiers = Modifier.template.copy()
-
         self.ability_modifiers = Modifier.template.copy()
         self.ability_modifiers.update(Modifier.template_ability)
-
         self.deceased: bool = False
         self.incapacitated: bool = False
-
         self.__perks: dict[str, int] = __perks
         self.perks: dict[str, CharacterPerk] = {}
         self.build_perkbilities(CharacterPerk, self.perks, self.__perks)
@@ -185,136 +179,54 @@ class Modifier:
 
 
 class Passive:
-    """
-    Passive-type abilities.
-    """
-
-    """
-    Acheivement Perk, unlocked by reaching milestones.
-    Unlocked every 10 levels, to a maximum of level 60.
-    Veteran adds +1 str, +0.33 vitality, +0.5 agilty per rank. [6 ranks max]
-    Maximum adds +6 str, +2 vit, +3 agi
-    """
     @staticmethod
     def veteran(level: int, ref: dict) -> None:
         ref['add_strength'] = level
         ref['add_agility'] = floor(0.5 * level)
         ref['add_vitality'] = floor(1 / 3 * level)
 
-    """
-    Acheivement Perk, unlocked by reaching milestones.
-    Unlocked every time a single predator manages to win against a group of 5
-    Veteran adds +0.4 str, +1 vitality, +0.4 agility per rank. [10 ranks max]
-    Maximum adds: +4 str, +10 vit, +4 agi.
-    """
     @staticmethod
     def raid_boss(level: int, ref: dict) -> None:
         ref['add_strength'] = floor(0.4 * level)
         ref['add_agility'] = floor(0.4 * level)
         ref['add_vitality'] = level
 
-    """
-    Acheivement Perk, unlocked by cursing yourself with being a programmer.
-    """
     @staticmethod
     def developer(level: int, ref: dict) -> None:
         ref['add_strength'] = -2
         ref['add_vitality'] = 2
 
-    """
-    Acheivement Perk, unlocked by winning numerous times as prey.
-    Levels every 10 wins to a total of 6 levels.
-    Extra DR at level 1: 2 and +1 DR for every perk level after.
-    +1 vit/level
-    """
     @staticmethod
     def hard_to_digest(level: int, ref: dict) -> None:
         ref['add_vitality'] = level
-        ref['add_damage_reduction'] = 1 + level
+        ref['add_damage_reduction'] = floor(level / 2)
 
-    """
-    Acheivement Perk, unlocked by being prey party's MVP healer 5 times.
-    Each level unlocks after 5 MVPs, to a total of level 10.
-    Each level after level 1 gains +8% healing effectiveness.
-    Multiplicative
-    """
     @staticmethod
     def best_friend(level: int, ref: dict) -> None:
         ref['mod_heal'] = level * 0.08
 
-    """
-    Purchased Perk, requires level 6.
-    For each level, decrease vit by 10%.
-                    inc agi/str by 10%
-    Multiplicative
-    """
     @staticmethod
     def rage_fueled(level: int, ref: int) -> None:
         ref['mod_strength'] = level * 0.1
-        ref['mod_agility'] = level * 0.1
+        ref['mod_agility'] = level * -0.1
         ref['mod_vitality'] = level * -0.1
 
-    """
-    Purchased Perk, requires level 6.
-    For each level, increase vit/agi by 10%
-                    decrease str by 10%
-    Multiplicative
-    """
     @staticmethod
     def stalwart(level: int, ref: dict) -> None:
         ref['mod_strength'] = level * -0.1
-        ref['mod_agility'] = level * 0.1
+        ref['mod_agility'] = level * -0.1
         ref['mod_vitality'] = level * 0.1
+
+    @staticmethod
+    def speedy(level: int, ref: dict) -> None:
+        ref['mod_strength'] = level * -0.1
+        ref['mod_agility'] = level * 0.1
+        ref['mod_vitality'] = level * -0.1
 
 
 class CharacterPerk:
     # Perk database, stores data including method pointer.
-    perkiary: dict[str, dict] = {
-        'developer': {
-            'level': 1,
-            'max_level': 1,
-            'setup': Passive.developer,
-            'badge': u'\U0001f6e0'
-        },
-        'raid boss': {
-            'level': 1,
-            'max_level': 10,
-            'setup': Passive.raid_boss,
-            'badge': u'\U0001f480'
-        },
-        'veteran': {
-            'level': 1,
-            'max_level': 6,
-            'setup': Passive.veteran,
-            'badge': u'\u2694'
-        },
-        'hard to digest': {
-            'level': 1,
-            'max_level': 6,
-            'setup': Passive.hard_to_digest,
-            'badge': u'\u26a0'
-        },
-        'best friend': {
-            'level': 1,
-            'max_level': 10,
-            'setup': Passive.best_friend,
-            'badge': u'\u26e8'
-        },
-        'rage-fueled': {
-            'level': 1,
-            'max_level': 4,
-            'setup': Passive.rage_fueled,
-            'costs': 2,
-            'requires': 6
-        },
-        'stalwart': {
-            'level': 1,
-            'max_level': 4,
-            'setup': Passive.stalwart,
-            'costs': 2,
-            'requires': 6
-        }
-    }
+    perkiary: dict[str, dict] = DOC['passives']
 
     def __init__(
         self,
@@ -326,7 +238,8 @@ class CharacterPerk:
         self.level: int = level
         self.character: GameCharacter = character
         self.modified: dict[str, int | float] = {}
-        CharacterPerk.perkiary[name]['setup'](self.level, self.modified)
+        self.fn = getattr(Passive, CharacterPerk.perkiary[name]['setup'])
+        self.fn(self.level, self.modified)
         for modifier, value in self.modified.items():
             self.character.modifiers[modifier] += value
         self.badge: str = CharacterPerk.perkiary[name].get('badge', '')
@@ -340,52 +253,22 @@ class CharacterPerk:
 
 
 class Ability:
-    """
-    Attack
-    Max: 10
-    Every level reduces stamina cost of attacking by 5%.
-    Starter
-    """
     @staticmethod
     def attack(level: int, ref: dict[str, int | float]) -> None:
         ref['attacking'] = 1
         ref['add_stamina'] = ceil((1 - (0.05 * (level - 1))) * 30)
 
-    """
-    Heal ability
-    base heal: 5
-    base roll: 2d4
-    Every level adds 1d4 to heal.
-    Max level: 10
-    Starter
-    """
     @staticmethod
     def heal(level: int, ref: dict[str, int | float]) -> None:
         ref['healing'] = 1
-        ref['add_heal'] = floor(level * 4 * random()) + level + 2
+        ref['add_heal'] = ceil((level + 1) * 4 * random()) + 5
         ref['add_stamina'] -= 25
 
-    """
-    Rest ability
-    Regenerate stamina for ability use 2x
-    Max level: 10
-    Each level increases efficiency by 5%.
-    Starter
-    """
     @staticmethod
     def rest(level: int, ref: dict[str, int | float]) -> None:
         ref['resting'] = 1
         ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.05)))
 
-    """
-    Defend ability
-    Regenerate stamina + block incoming damage.
-    Max level: 10
-    Each level increases stamina regeneration by 5%
-    Each second level increases damage reduction by 2
-    Each second level increases damage buffer by 2
-    Starter
-    """
     @staticmethod
     def defend(level: int, ref: dict[str, int | float]) -> None:
         ref['defending'] = 1
@@ -395,37 +278,7 @@ class Ability:
 
 
 class CharacterAbility:
-    # Perk database, stores data including method pointer.
-    abiliary: dict[str, dict] = {
-        'attack': {
-            'level': 1,
-            'max_level': 1,
-            'setup': Ability.attack,
-            'cost': 2,
-            'targetted': False
-        },
-        'heal': {
-            'level': 1,
-            'max_level': 10,
-            'setup': Ability.heal,
-            'cost': 2,
-            'targetted': True
-        },
-        'rest': {
-            'level': 1,
-            'max_level': 5,
-            'setup': Ability.rest,
-            'cost': 2,
-            'targetted': False
-        },
-        'defend': {
-            'level': 1,
-            'max_level': 5,
-            'setup': Ability.defend,
-            'cost': 2,
-            'targetted': False
-        }
-    }
+    abiliary: dict[str, dict] = DOC['abilities']
 
     def __init__(
         self,
@@ -436,6 +289,7 @@ class CharacterAbility:
         self.name: str = name
         self.level: int = level
         self.character: GameCharacter = character
+        self.fn = getattr(Ability, CharacterAbility.abiliary[name]['setup'])
         self.modified: dict[str, int | float] = {}
 
     def remove(self) -> None:
@@ -445,7 +299,7 @@ class CharacterAbility:
     def use_ability(self) -> None:
         self.remove()
         self.modified = {}
-        CharacterAbility.abiliary[self.name]['setup'](
+        self.fn(
             self.level, self.modified
         )
         for modifier, value in self.modified.items():
@@ -646,13 +500,10 @@ class Round:
             prey.update_statuses()
 
     def calculate_round(self) -> None:
-        # Calculate incoming damage on pred
         for action in self.prey_act:
             continue
-        # Calculate incoming damage on prey
 
     def end_turn(self) -> None:
-        # Set the chosen action in stone, cycle to next or calculate round.
         pass
 
 
@@ -701,27 +552,25 @@ class UI:
         m_st_m: float = character.modifiers.get('mod_stamina_max', 1.0)
         m_hp: int = floor((a_hp_m + 100 + floor(v / 5) * 15) * m_hp_m)
         m_st: int = floor((a_st_m + 100 + floor(v / 5) * 5) * m_st_m)
-        d: int = (1 + floor((floor(a / 5) * 20) / 100) + floor(a / 15))
-        c: int = (30 + floor(a / 5) * 20) % 100
-        f: int = 8 + floor(s / 3) * 2
+        d: int = (1 + floor((floor(a / 5) * 15) / 100) + floor(a / 15))
+        c: int = (30 + floor(floor(a / 5) * 15)) % 100
+        f: int = 8 + floor(s / 4) * 2
         m: int = floor(s / 10) * 3
         e: int = floor(a / 10) * 6
         dr: int = floor(v / 10) * 2
         db: int = floor(v / 5) * 3
         o_s += (
-            f'{b}[user]{c_n}[/user] LVL:{c_l} STR:{s} AGI:{a} VIT:{v}\n' +
-            f'[color=green]HP[/color] {round(m_hp * c_hp)}/{m_hp}\n'
+            f'{b}[user]{c_n}[/user] [color=white][b][{c_l}][/b][/color]\n' +
+            f'[color=red][b][{round(m_hp * c_hp)}/{m_hp}][/b][/color] ' +
+            f'[color=white][STR:{s} AGI:{a} VIT:{v}][/color]\n' +
             f'{UI.get_bar_str(c_hp)}\n' +
             f'{UI.get_bar_str(c_st)}\n' +
-            f'[color=red]STA[/color] {round(m_st * c_st)}/{m_st}'
+            f'[color=green][b][{round(m_st * c_st)}/{m_st}][/b][/color]' +
+            f' [color=white][ROLL:{d}d{f}+{m} CRIT:{c}% EV:{e}% DR:{dr}' +
+            f' DB:{db}][/color]'
         )
         if b:
             o_s += f'\n{bs}'
-        if detailed:
-            o_s += (
-                f'\nATTACK ROLL: {d}d{f} + {m}' +
-                f'\nCRIT%:{c} EVADE%:{e} DR: {dr} DB: {db}'
-            )
         if b and detailed:
             o_s += '\n[b]ACHEIVEMENTS:[/b]'
             for name, perk in character.perks.items():
@@ -734,14 +583,3 @@ class UI:
                         f'{max_level}'
                     )
         return o_s
-
-
-kali = ThirstyCharacter('Kali')
-kali.level = 60
-kali.strength += 20
-kali.vitality += 30
-kali.agility += 20
-kali.add_perk('raid boss', 10)
-kali.add_perk('developer', 1)
-kali.add_perk('veteran', 6)
-print(UI.sheet(kali, detailed=True))

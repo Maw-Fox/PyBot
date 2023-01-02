@@ -1,0 +1,108 @@
+{
+    "passives": {
+        "developer": {
+            "max_level": 1,
+            "setup": "developer",
+            "badge": "\ud83d\udee0",
+            "type": "Milestone Perk",
+            "how": "Be cursed in life to be a software developer.",
+            "perks": "-2 str, +2 vit."
+        },
+        "raid boss": {
+            "max_level": 10,
+            "setup": "raid_boss",
+            "badge": "\ud83d\udc80",
+            "type": "Milestone Perk",
+            "how": "Beat all five prey in a 1v5 as pred.",
+            "notes": "You gain 1 level of this perk every time you win a 1v5 fight.",
+            "perks": "+0.4 strength, +0.4 agi, +1 vit per level."
+        },
+        "veteran": {
+            "max_level": 6,
+            "setup": "veteran",
+            "badge": "\u2694",
+            "type": "Milestone Perk",
+            "how": "Progression, gain 1 level per 10 max levels you have reached to a max 6 levels.",
+            "perks": "+1 strength, +0.5 agi, +0.33 vit per level."
+        },
+        "hard to digest": {
+            "max_level": 6,
+            "setup": "hard_to_digest",
+            "badge": "\u26a0",
+            "type": "Milestone Perk",
+            "how": "Win as prey 10 times to gain a single level.",
+            "notes": "Only 1v1s count within with a pred that is within +-10 levels.",
+            "perks": "+1 vit, +0.5 DR per level."
+        },
+        "best friend": {
+            "max_level": 10,
+            "setup": "best_friend",
+            "badge": "\u26e8",
+            "type": "Milestone Perk",
+            "how": "1 level per 5 wins as a prey MVP healer.",
+            "notes": "MVP means you did more than 50 percent of the healing in your prey group. This only counts for 1v2-1v5 as prey.",
+            "perks": "+%8 healing per level."
+        },
+        "rage fueled": {
+            "max_level": 2,
+            "setup": "rage_fueled",
+            "costs": 3,
+            "type": "Purchased Perk",
+            "perks": "+%10 str/-10% agi/-10% vit per level."
+        },
+        "stalwart": {
+            "max_level": 2,
+            "setup": "stalwart",
+            "costs": 3,
+            "type": "Purchased Perk",
+            "perks": "+%10 vit/-10% agi/-10% str per level."
+        },
+        "speedy": {
+            "max_level": 2,
+            "setup": "speedy",
+            "costs": 3,
+            "type": "Purchased Perk",
+            "perks": "+%10 agi/-10% vit/-10% str per level."
+        }
+    },
+    "abilities": {
+        "attack": {
+            "level": 1,
+            "max_level": 1,
+            "setup": "attack",
+            "cost": 2,
+            "targetted": false
+        },
+        "heal": {
+            "level": 1,
+            "max_level": 10,
+            "setup": "heal",
+            "cost": 2,
+            "targetted": true
+        },
+        "rest": {
+            "level": 1,
+            "max_level": 5,
+            "setup": "rest",
+            "cost": 2,
+            "targetted": false
+        },
+        "defend": {
+            "level": 1,
+            "max_level": 5,
+            "setup": "defend",
+            "cost": 2,
+            "targetted": false
+        }
+    },
+    "help": {
+        "abilities": "[b]Hungry Game[/b]: Gives you a list of abilities or info about a specific ability.\n[b]Usage[/b]:\n   \"[i]!abilities[/i]\" Get a list of available abilities.\n   \"[i]!abilities attack[/i]\" Check out info about the veteran ability.",
+        "perks": "[b]Hungry Game[/b]: Gives you a list of perks or info about a specific perk.\n[b]Usage[/b]:\n   \"[i]!perks[/i]\" Get a list of available perks.\n   \"[i]!perks veteran[/i]\" Check out info about the veteran perk.",
+        "hungry": "[b]Hungry Game[/b]: A brief explainer of the game mechanics:\nThink of [b]Hungry Game[/b] as a RPG-lite focused around vore, though it can easily be utilized for general fighting scenes similarly. If there is adequate desire to generalize it, I'd be more than happy to adjust [b]Hungry Game[/b] to encompass that.\n\n[b]Hungry Game[/b] is meant to not be a game in and of itself, but rather a supporting asset to control the flow of an RP. Sometimes you are surprised and things don't go your way. Inversely there are times where things go unexpectedly well! The sky is the limit really! This is just a fancy dice game without the pain of having to explain the rules to everyone in the party, and how to handle rolling. [b]Hungry Game[/b] looks to trivialize this experience and allow more people the ability to get into incorporating external systems into their RP.\n\n[b]Stats:[/b]\n[i]Stats are exactly what they say on the tin below. Stats are a very generic way of making your character stronger. They do not progress linearly like a lot of RPGs, but rather they unlock certain bonuses in multiple different level intervals. This means stat milestones come with very large bonuses that you can [b]really feel[/b]! Rather than a slow and steady progression that feels unrewarding.[/i]\n   [b]Strength:[/b]\n       [i]Base attack roll: 1d8 + 0[/i]       Every 4 levels of strength gives +2 to die faces. Example: 1d8 -> 1d10.\n       Every 10 levels of strength gives +3 to your damage modifier. Example: 1d8 + 0 -> 1d8 + 3.\n   [b]Agility:[/b]\n       [i]Base crit chance is 30%, crit adds +1 die to a roll. Base evasion is 0%. Evading an attack negates all incoming damage[/i].\n       Every 5 levels of agility gives +12.5% crit chance. Crit does indeed stack well above 100%. :)\n       Every 10 levels of agility increases evasion chance by %6.\n       Every 15 levels of agility gives you +1 die to your attack  rolls.\n   [b]Vitality:[/b]\n       [i]Base HP/Stamina is 100, base damage reduction is 0 and base damage buffer is also 0.[/i]\n       Every 5 levels of vitality causes you to gain an extra +3 damage buffer that resets per round. Example: You have two incoming attacks for 2 damage, but you have 3 damage buffer. You take a total of 1 damage, as 3 was absorbed by your buffer.\n       Every 5 levels of vit also nets you +15 HP/+5 stamina.\n       Every 10 levels of vit adds +2 damage reduction to your \ncharacter. Example: Just like before, 2x2 damage attacks are incoming, but your 2 damage reduction causes you to take [b]no damage[/b]. This is particularly useful in [b]Hungry Game[/b] because the game allows numerous people to fight at once. At the moment the limit is 1 pred vs 1-5 prey.\n\n   [b]Perks/Abilities/Status Effects:[/b]\n       Perks and abilities can be gained both by spending their respective points you earn upon character progression (leveling).\n       Every 2 levels gives you 1 perk point, every 4 levels nets you an ability point.\n       You gain levels by winning in combat, however it's not an  EXP system like most RPGs. Winning as pred nets you 1 level; However, losing as pred loses you 2 levels. Winning as prey nets you 2 levels, and you only lose 1 level for a loss. Prey are naturally at a disadvantage in this game and suffer a status effect that causes them to only act at 60% efficiency. This means an equal-level predator against a single prey has a very, very high chance at winning.\n       You can find out more about perks and abilities by using the \"[i]!perks[/i]\" and \"[i]!abilities[/i] commands respectively.\n       Some perks are unable to be purchased via the \"[i]!buy[/i]\" command, but require your character to progress to milestones or acheivements. For instance: a level of the \"raid boss\" perk is gained each time you defeat 5 prey as a single pred in a 1v5 game. These bonuses are often rather substantial given the luck necessary in order to earn them. Hidden/Acheivement perks also give you \"badges\". Badges show up next to your character name within the [b]Hungry Game[/b] and you can set which badge you want to display with \"[i]!badge[/i]\" command. All badge unlocks will show up under your character \"[i]!sheet[/i]\".\n\n\"[i]!sheet[/i]\" is a very important command to show you your character progression, current stat points/perk points/ability points that you currently can spend.\n\nWell, that about sums it up, hope you enjoy the game!\nIf you have anymore questions or concerns, please contact [user]Kali[/user], the developer/creator of this game and bot!",
+        "create": "[b]Hungry Game[/b] A command to begin to character creation process.",
+        "buy": "[b]Hungry Game[/b]: A command to spend [i]perk points[/i], [i]ability points[/i] and [i]stat points[/i].\n[b]Usage[/b]:\n   \"[i]!buy perk 4 rage-fueled[/i]\": buy [i]4 levels[/i] of a [i]perk[/i] called [b]rage-fueled[/b]\"\n   \"[i]!buy stat 10 strength[/i]\": buy [i]10 points[/i] of the [b]strength[/b] [i]stat[/i]\n   \"[i]!buy ability heal[/i]\": buy [i]1 level[/i] of the [/b]heal[/b] [i]ability[/i].",
+        "logs": "A log of moderation actions that the bot has taken.",
+        "yeeted": "Let me show you my kill count. >:3~",
+        "yeetus": "Gotta protect the kids from themselves. :>~"
+    }
+}

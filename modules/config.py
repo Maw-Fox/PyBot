@@ -50,9 +50,9 @@ def do_crypt(phrase: str, pw: str, forward: bool = True, _t='sha512') -> bytes:
 
 
 def get_config() -> dict[str, str | int]:
-    if os.path.exists('data/config.json'):
+    if os.path.exists('config.json'):
         file = open(
-            'data/config.json',
+            'config.json',
             'r',
             encoding='UTF-8'
         )
