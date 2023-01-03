@@ -6,7 +6,7 @@ from functools import singledispatch as default
 from os import path
 
 LAST_SNAPSHOT: int = int(time())
-SNAPSHOT_DELAY: int = 300
+SNAPSHOT_DELAY: int = 1200
 
 DOC: dict[str, dict[str, complex]] = {}
 
@@ -29,13 +29,18 @@ class GameCharacter():
         strength: int = 4,
         agility: int = 4,
         vitality: int = 4,
-        stat_alloc: int = 10,
+        stat_alloc: int = 11,
         perk_alloc: int = 0,
         ability_alloc: int = 0,
         wins: list[dict[str, list]] = [],
         losses: list[dict[str, list]] = [],
-        __perks: dict[str, int] = {},
-        __abilities: dict[str, int] = {},
+        perks: dict[str, int] = {},
+        abilities: dict[str, int] = {
+            'attack': 1,
+            'heal': 1,
+            'rest': 1,
+            'defend': 1
+        },
         badge: str = ''
     ):
         self.display_name: str = name
@@ -58,20 +63,18 @@ class GameCharacter():
         self.ability_modifiers.update(Modifier.template_ability)
         self.deceased: bool = False
         self.incapacitated: bool = False
-        self.__perks: dict[str, int] = __perks
+        self.badge: str = badge
+        self.has_badges: str = ''
+        self.desires_refund: int = 0
         self.perks: dict[str, CharacterPerk] = {}
-        self.build_perkbilities(CharacterPerk, self.perks, self.__perks)
-        self.__abilities: dict[str, int] = __abilities
+        self.build_perkbilities(CharacterPerk, self.perks, perks)
         self.abilities: dict[str, CharacterAbility] = {}
         self.build_perkbilities(
             CharacterAbility,
             self.abilities,
-            self.__abilities
+            abilities
         )
-        del self.__abilities
-        del self.__perks
-        self.badge: str = badge
-        self.has_badges: str = ''
+        Game.add_character(self.name, self)
 
     def build_perkbilities(self, cls, new_li: dict, li: dict[str, int]):
         for name in li:
@@ -193,8 +196,15 @@ class Passive:
 
     @staticmethod
     def developer(level: int, ref: dict) -> None:
-        ref['add_strength'] = -2
-        ref['add_vitality'] = 2
+        ref['mod_strength'] = 0.1
+        ref['mod_strength'] = 0.1
+        ref['mod_vitality'] = 0.2
+
+    @staticmethod
+    def tester(level: int, ref: dict) -> None:
+        ref['add_strength'] = 2
+        ref['add_agility'] = 1
+        ref['add_vitality'] = 3
 
     @staticmethod
     def hard_to_digest(level: int, ref: dict) -> None:
@@ -267,14 +277,14 @@ class Ability:
     @staticmethod
     def rest(level: int, ref: dict[str, int | float]) -> None:
         ref['resting'] = 1
-        ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.05)))
+        ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.075)))
 
     @staticmethod
     def defend(level: int, ref: dict[str, int | float]) -> None:
         ref['defending'] = 1
         ref['add_stamina'] = ceil(20 * (1 + ((level - 1) * 0.05)))
-        ref['add_damage_reduction'] = floor((level - 1) * 2)
-        ref['add_damage_buffer'] = floor((level - 1) * 2)
+        ref['add_damage_reduction'] = level * 1 + 3
+        ref['add_damage_buffer'] = level * 2 + 4
 
 
 class CharacterAbility:
@@ -306,16 +316,6 @@ class CharacterAbility:
             self.character.ability_modifiers[modifier] += value
 
 
-# Increases stat allocation points per level.
-# A level is gained for defeating another player.
-# A predator loses 2 levels per loss to a floor of level 1,
-# However, if a predator is battling more than 1 person, they only
-# lose 1 level if they lose to both prey, for a maximum of no penalty
-# if the predator managed to finish off a prey,
-# Defeating multiple prey gives the standard +1 level per prey.
-# Maximum allocated stat points will be 60.
-# Every 2 levels = 1 perk point.
-# Every 4 levels = 1 ability point.
 class HungryCharacter(GameCharacter):
     def __init__(
         self,
@@ -324,7 +324,7 @@ class HungryCharacter(GameCharacter):
         strength: int = 4,
         agility: int = 4,
         vitality: int = 4,
-        stat_alloc: int = 0,
+        stat_alloc: int = 11,
         perk_alloc: int = 0,
         ability_alloc: int = 0,
         wins: list[dict[str, list]] = [],
@@ -358,15 +358,6 @@ class HungryCharacter(GameCharacter):
         )
 
 
-# Increases stat allocation points per level.
-# A level is gained for defeating another player.
-# A prey loses 1 level per loss to a floor of level 1.
-# Prey that team up to take on a single predator at a time
-# will lose 2 levels if they fall, if they both fall then
-# both will lose 3 levels each.
-# Maximum allocated stat points will be 60.
-# Every 2 levels = 1 perk point.
-# Every 4 levels = 1 ability point.
 class ThirstyCharacter(GameCharacter):
     def __init__(
         self,
@@ -430,29 +421,6 @@ class Game:
         self.rounds: list[Round] = []
         self.round: Round = Round(self.pred, self.prey)
 
-        if path.exists('data/hungry_db.json'):
-            f = open('data/hungry_db.json', 'r', encoding='utf-8')
-            cdata = json.load(f)
-            f.close()
-
-            for name in cdata:
-                c = cdata[name]
-                Game.characters[name.lower()] = GameCharacter(
-                    name=c['n'],
-                    level=c['lv'],
-                    strength=c['s'],
-                    agility=c['a'],
-                    vitality=c['v'],
-                    stat_alloc=c['st'],
-                    perk_alloc=c['pp'],
-                    ability_alloc=c['ap'],
-                    wins=c['w'],
-                    losses=c['l'],
-                    __perks=c['p'],
-                    __abilities=c['a'],
-                    badge=c['b']
-                )
-
     @staticmethod
     def game_characters(
         _T: None | GameCharacter | str = None
@@ -470,18 +438,53 @@ class Game:
 
     @staticmethod
     def get_character(
-        _T: str | list[GameCharacter]
+        c: str | list[str]
     ) -> GameCharacter | list[GameCharacter] | None:
         li: list[GameCharacter] = []
-        if type(_T) == str:
-            return Game.characters.get(id.lower(), None)
+        if type(c) == str:
+            return Game.characters.get(c.lower(), None)
         else:
-            for char_string in _T:
-                char: GameCharacter | None = Game.characters[char_string]
+            for char_string in c.copy():
+                char: GameCharacter | None = Game.characters.get(char_string)
                 if not char:
                     return None
                 li.append(char)
             return li
+
+    @staticmethod
+    def check_save(t: int) -> None:
+        if t - LAST_SNAPSHOT > SNAPSHOT_DELAY:
+            return Game.save_characters()
+
+    @staticmethod
+    def save_characters() -> None:
+        save_state: dict = {}
+
+        for name in Game.characters:
+            perk: dict[str, int] = {}
+            ability: dict[str, int] = {}
+            char: GameCharacter = Game.characters[name]
+            for name in char.perks:
+                perk[name] = char.perks[name].level
+            for name in char.abilities:
+                ability[name] = char.abilities[name].level
+            save_state[char.display_name] = {
+                'lv': char.level,
+                's': char.strength,
+                'a': char.agility,
+                'v': char.vitality,
+                'st': char.stat_alloc,
+                'pp': char.perk_alloc,
+                'ap': char.ability_alloc,
+                'w': char.wins,
+                'l': char.losses,
+                'p': perk,
+                'as': ability,
+                'b': char.badge
+            }
+        f = open('data/hungry_db.json', 'w', encoding='utf-8')
+        f.write(json.dumps(save_state))
+        f.close()
 
 
 class Round:
@@ -529,8 +532,7 @@ class UI:
 
     @staticmethod
     def sheet(
-        character: GameCharacter,
-        detailed: bool = False
+        character: GameCharacter
     ) -> str:
         o_s: str = '\n'
         c_n: str = character.display_name
@@ -552,8 +554,8 @@ class UI:
         m_st_m: float = character.modifiers.get('mod_stamina_max', 1.0)
         m_hp: int = floor((a_hp_m + 100 + floor(v / 5) * 15) * m_hp_m)
         m_st: int = floor((a_st_m + 100 + floor(v / 5) * 5) * m_st_m)
-        d: int = (1 + floor((floor(a / 5) * 15) / 100) + floor(a / 15))
-        c: int = (30 + floor(floor(a / 5) * 15)) % 100
+        d: int = 1 + floor((30 + floor(a / 5) * 12.5) / 100) + floor(a / 15)
+        c: int = 10 + floor(floor(a / 5) * 12.5) % 100
         f: int = 8 + floor(s / 4) * 2
         m: int = floor(s / 10) * 3
         e: int = floor(a / 10) * 6
@@ -567,19 +569,83 @@ class UI:
             f'{UI.get_bar_str(c_st)}\n' +
             f'[color=green][b][{round(m_st * c_st)}/{m_st}][/b][/color]' +
             f' [color=white][ROLL:{d}d{f}+{m} CRIT:{c}% EV:{e}% DR:{dr}' +
-            f' DB:{db}][/color]'
+            f' DB:{db}]'
         )
         if b:
             o_s += f'\n{bs}'
-        if b and detailed:
             o_s += '\n[b]ACHEIVEMENTS:[/b]'
             for name, perk in character.perks.items():
-                if not perk.perkiary.get(name).get('cost'):
+                if not perk.perkiary[name].get('cost'):
                     perk_obj: dict[str, complex] = perk.perkiary.get(name)
                     badge: str = perk_obj.get('badge')
                     max_level: int = perk_obj.get('max_level')
+                    badge = badge if badge else '    '
                     o_s += (
-                        f'\n{badge}   {name.upper()}: {perk.level}/' +
+                        f'\n{badge}   [b]{name.upper()}[/b]: {perk.level}/' +
                         f'{max_level}'
                     )
+        if len(character.perks.keys()):
+            o_s += '\n[b]PERKS:[/b]'
+            for name, perk in character.perks.items():
+                if perk.perkiary[name].get('cost'):
+                    perk_obj: dict[str, complex] = perk.perkiary.get(name)
+                    max_level: int = perk_obj.get('max_level')
+                    o_s += (
+                        f'\n       [b]{name.upper()}[/b]: {perk.level}/' +
+                        f'{max_level}'
+                    )
+        o_s += '\n[b]ABILITIES:[/b]'
+        for name, ability in character.abilities.items():
+            ability_obj: dict[str, complex] = ability.abiliary.get(name)
+            max_level: int = ability_obj.get('max_level')
+            o_s += (
+                f'\n       [b]{name.upper()}[/b]: {ability.level}/' +
+                f'{max_level}'
+            )
+        if (
+            character.ability_alloc or
+            character.perk_alloc or
+            character.stat_alloc
+        ):
+            o_s += '\n[b]UNSPENT POINTS:[/b]'
+            if character.stat_alloc:
+                o_s += (
+                    '\n       [b]STAT POINTS:[/b] ' +
+                    f'{character.stat_alloc}'
+                )
+            if character.perk_alloc:
+                o_s += (
+                    '\n       [b]PERK POINTS:[/b] ' +
+                    f'{character.perk_alloc}'
+                )
+            if character.ability_alloc:
+                o_s += (
+                    '\n       [b]ABILITY POINTS:[/b] ' +
+                    f'{character.ability_alloc}'
+                )
+            o_s += '[/color]'
         return o_s
+
+
+if path.exists('data/hungry_db.json'):
+    f = open('data/hungry_db.json', 'r', encoding='utf-8')
+    cdata = json.load(f)
+    f.close()
+
+    for name in cdata:
+        c = cdata[name]
+        char: GameCharacter = GameCharacter(
+            name=name,
+            level=c['lv'],
+            strength=c['s'],
+            agility=c['a'],
+            vitality=c['v'],
+            stat_alloc=c['st'],
+            perk_alloc=c['pp'],
+            ability_alloc=c['ap'],
+            wins=c['w'],
+            losses=c['l'],
+            perks=c['p'],
+            abilities=c['as'],
+            badge=c['b']
+        )

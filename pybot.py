@@ -87,6 +87,7 @@ class Socket:
                     else:
                         t: int = int(time())
                         AUTH.check_ticket()
+                        H.Game.check_save(t)
                         if t - CHECK['last'] > CHECK['every']:
                             CHECK['last'] = t
                             for char in KILLS_LAST.copy():
@@ -362,92 +363,7 @@ class Output:
 
 
 class Parser:
-    templates: dict[str, str | list[dict[str, complex]]] = {
-        'buy': [
-            {
-                'name': 'upgrade',
-                'type': str,
-                'one_of': {
-                    'perk': 1,
-                    'stat': 1,
-                    'ability': 1
-                }
-            },
-            {
-                'name': 'amount',
-                'type': int,
-                'optional': True
-            },
-            {
-                'name': 'selection',
-                'type': str,
-                'multi': True
-            },
-        ],
-        'challenge': [
-            {
-                'name': 'character',
-                'type': list,
-                'multi': True
-            }
-        ],
-        'help': [
-            {
-                'name': 'sub_command',
-                'type': str,
-                'optional': True
-            }
-        ],
-        'badge': [
-            {
-                'name': 'badge',
-                'type': str,
-                'multi': True
-            }
-        ],
-        'sheet': [
-            {
-                'name': 'character',
-                'type': str,
-                'last': True
-            }
-        ],
-        'target': [
-            {
-                'name': 'character',
-                'type': str,
-                'last': False
-            },
-            {
-                'name': 'ability',
-                'type': str,
-            }
-        ],
-        'perks': [
-            {
-                'name': 'perk',
-                'type': str,
-                'multi': True,
-                'optional': True
-            }
-        ],
-        'create': [],
-        'action': [
-            {
-                'name': 'action',
-                'type': str
-            }
-        ],
-        'yeetus': [],
-        'yeeted': [],
-        'logs': [
-            {
-                'name': 'amount',
-                'type': int,
-                'optional': True
-            }
-        ]
-    }
+    templates: dict[str, list] = H.DOC['syntax']
 
     @staticmethod
     def __parse(
@@ -460,9 +376,13 @@ class Parser:
             'command': command,
             'error': ''
         }
-        if not template:
+        if type(template) != list:
             built_args['error'] = 'Unrecognized command.'
             return built_args
+
+        if not len(template):
+            return built_args
+
         while True:
             try:
                 exploded.remove('')
@@ -490,15 +410,15 @@ class Parser:
                     return built_args
                 built_args[name] = first
             if arg.get('multi'):
-                if T == list:
+                if T == 'list':
                     exploded = re.split('[ ]?,[ ]?', buffer)
                     built_args[name] = exploded
                     break
                 built_args[name] = buffer
                 break
-            if T == int and arg.get('optional'):
+            if T == "int" and arg.get('optional'):
                 if re.match('^[0-9]+$', exploded[0]):
-                    built_args[name] = T(exploded.pop(0))
+                    built_args[name] = max(int(exploded.pop(0)), 0)
                 continue
             if name == 'character':
                 if arg.get('last'):
@@ -527,8 +447,25 @@ class Parser:
 
 
 class Command:
+    help: dict[str, str] = H.DOC['help']
+
+    help['help'] = (
+        '[b]Help:[/b] a list off commands are below, type "!help command" ' +
+        'to see more information regarding these commands.\n' +
+        '   [b]General:[/b]\n      ' +
+        '   '.join([
+            'logs', 'yeetus', 'yeeted', '[b]help[/b]'
+        ]) + '\n'
+        '   [b]Hungry Game:[/b]\n      ' +
+        '   '.join([
+            'hungry', 'create', 'buy', '[s]target[/s]', '[s]badge[/s]',
+            '[s]challenge[/s]', 'sheet', '[s]action[/s]', 'perks',
+            'abilities', 'refund'
+        ]) + '\n'
+    )
+
     @staticmethod
-    async def __append_thing_info(thing_obj: dict) -> str:
+    def __append_thing_info(thing_obj: dict) -> str:
         t_s: str = '\n   [b]Type[/b]\n      '
         t: str = thing_obj.get('type', '')
         h_s: str = '\n   [b]How[/b]:\n      '
@@ -544,13 +481,77 @@ class Command:
         c_s: str = '\n   [b]Cost[/b]: '
         c: str = str(thing_obj.get('cost', ''))
         return (
-            t_s + t if t else '' +
-            h_s + h if h else '' +
-            n_s + n if n else '' +
-            p_s + p if p else '' +
-            c_s + c if c else '' +
-            ml_s + ml if ml else '' +
-            b_s + b if b else ''
+            (t_s + t if t else '') +
+            (h_s + h if h else '') +
+            (n_s + n if n else '') +
+            (p_s + p if p else '') +
+            (c_s + c if c else '') +
+            (ml_s + ml if ml else '') +
+            (b_s + b if b else '')
+        )
+
+    @staticmethod
+    async def refund(
+        by: Character,
+        **kwargs
+    ) -> None:
+        time_stamp: int = int(time())
+        output: Output = Output(recipient=by)
+        char: H.GameCharacter = H.Game.get_character(by.name)
+        if not char:
+            return await output.send(
+                '[b]Hungry Game[/b]: You don\'t have a character to refund.'
+            )
+        if time_stamp - char.desires_refund > 300:
+            char.desires_refund = int(time())
+            return await output.send(
+                '[b]Hungry Game[/b]: Type this command again to confirm ' +
+                'you want to refund all your spent points.'
+            )
+        level: int = char.level
+        char.strength = 4
+        char.agility = 4
+        char.vitality = 4
+        char.stat_alloc = 10 + level
+        char.perk_alloc = floor(level / 2)
+        char.ability_alloc = floor(level / 4)
+        for name in char.perks.copy():
+            perk: H.CharacterPerk = char.perks[name]
+            if perk.perkiary[name].get('cost'):
+                perk.remove()
+                char.remove_perk(name)
+        for name in char.abilities.copy():
+            char.abilities[name].remove()
+            char.remove_ability(name)
+            char.add_ability(name, 1)
+        return await output.send(
+            '[b]Hungry Game[/b]: Refund complete!'
+        )
+
+    @staticmethod
+    async def sheet(
+        by: Character,
+        character: str = '',
+        **kwargs
+    ) -> None:
+        character: str = character
+        output: Output = Output(recipient=by)
+        if not character:
+            char: H.GameCharacter = H.Game.get_character(by.name)
+            if not char:
+                return await output.send(
+                    '[b]Hungry Game[/b]: You don\'t have a character.'
+                )
+            return await output.send(
+                '[b]Hungry Game[/b]:' + H.UI.sheet(char)
+            )
+        char: H.GameCharacter | None = H.Game.get_character(character)
+        if not char:
+            return await output.send(
+                f'[b]Hungry Game[/b]: Unknown character "{character}".'
+            )
+        return await output.send(
+            f'[b]Hungry Game[/b]:' + H.UI.sheet(char)
         )
 
     @staticmethod
@@ -565,18 +566,18 @@ class Command:
         if not ability:
             return await output.send(
                 '[b]Hungry Game[/b]: List of currently available abilities:' +
-                '\n' + '   '.join([x for x in H.CharacterAbility.abiliary])
+                '\n' + '   '.join([x for x in H.CharacterAbility.abiliary]) +
+                '\n[sub]Remember to use "[i]!abilities name[/i]" for ' +
+                'more info![/sub]'
             )
         if not ability_obj:
             return await output.send(
                 '[b]Error[/b]: No such ability exists.'
             )
         return await output.send(
-            f'[b]Hungry Game[/b]: Ability info for "{ability}":\n' +
+            f'[b]Hungry Game[/b]: Ability info for "{ability}":' +
             Command.__append_thing_info(ability_obj)
         )
-
-    abilities_help: str = H.DOC['help']['abilities']
 
     @staticmethod
     async def perks(
@@ -588,24 +589,25 @@ class Command:
         perk_obj: dict | None = H.CharacterPerk.perkiary.get(perk)
         output: Output = Output(recipient=by)
         if not perk:
+            perks: list[str] = []
+            for x in H.CharacterPerk.perkiary:
+                if H.CharacterPerk.perkiary[x].get('cost'):
+                    perks.append(u'\U0001f4b2' + x)
+                else:
+                    perks.append(u'\u2b50' + x)
+            perks = sorted(perks)
             return await output.send(
                 '[b]Hungry Game[/b]: List of currently available perks:\n' +
-                '   '.join([x for x in H.CharacterPerk.perkiary])
+                '   '.join(perks)
             )
         if not perk_obj:
             return await output.send(
                 '[b]Error[/b]: No such perk exists.'
             )
         return await output.send(
-            f'[b]Hungry Game[/b]: Perk info for "{perk}":\n' +
+            f'[b]Hungry Game[/b]: Perk info for "{perk}":' +
             Command.__append_thing_info(perk_obj)
         )
-
-    perks_help: str = H.DOC['help']['perks']
-
-    hungry_help: str = H.DOC['help']['hungry']
-
-    create_help: str = H.DOC['help']['create']
 
     @staticmethod
     async def create(
@@ -625,14 +627,12 @@ class Command:
         char = H.GameCharacter = H.GameCharacter(
             name=by.name
         )
-        out_str: str = H.UI.sheet(character=char, detailed=True)
+        out_str: str = H.UI.sheet(character=char)
         return await output.send(
             f'{out_str}\nYou have created a new character for ' +
             '[b]Hungry Game[/b]!\nIn order to allocate points ' +
             'and read the rules, check the "[i]!help[/i] hungry" command!'
         )
-
-    buy_help: str = H.DOC['help']['buy']
 
     @staticmethod
     async def help(
@@ -641,28 +641,14 @@ class Command:
         **kwargs
     ) -> None:
         output: Output = Output(recipient=by)
-        help: str = getattr(Command, f'{sub_command.lower()}_help', False)
+        help: str = Command.help.get(sub_command)
         if not help:
             return await output.send(
-                Command.help_help
+                Command.help['help']
             )
         return await output.send(
             help
         )
-
-    help_help: str = (
-        '[b]Help:[/b] a list off commands are below, type "!help command" ' +
-        'to see more information regarding these commands.\n' +
-        '   [b]General:[/b]\n      ' +
-        '   '.join([
-            'logs', 'yeetus', 'yeeted', '[b]help[/b]'
-        ]) + '\n'
-        '   [b]Hungry Game:[/b]\n      ' +
-        '   '.join([
-            'hungry', 'create', 'buy', 'target', 'badge', 'challenge', 'sheet',
-            'action'
-        ]) + '\n'
-    )
 
     async def buy(
         by: Character,
@@ -676,8 +662,7 @@ class Command:
         )
         upgrade: str = upgrade.lower()
         selection: str = selection.lower()
-        char_name: str = by.name
-        char: H.GameCharacter = H.Game.get_character(char_name)
+        char: H.GameCharacter = H.Game.get_character(by.name)
         valid_stat: dict[str, bool] = {
             'strength': True,
             'agility': True,
@@ -772,8 +757,6 @@ class Command:
                 u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
             )
 
-    logs_help: str = H.DOC['help']['logs']
-
     @staticmethod
     async def logs(
         output: Output,
@@ -807,8 +790,6 @@ class Command:
             )
         )
 
-    yeeted_help: str = H.DOC['help']['yeeted']
-
     @staticmethod
     async def yeeted(
         chan: Channel,
@@ -837,8 +818,6 @@ class Command:
                 time_string
             )
         )
-
-    yeetus_help: str = H.DOC['help']['yeetus']
 
     @staticmethod
     async def yeetus(
