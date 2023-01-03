@@ -447,9 +447,9 @@ class Parser:
 
 
 class Command:
-    help: dict[str, str] = H.DOC['help']
+    doc: dict[str, str] = H.DOC['help']
 
-    help['help'] = (
+    doc['help'] = (
         '[b]Help:[/b] a list off commands are below, type "!help command" ' +
         'to see more information regarding these commands.\n' +
         '   [b]General:[/b]\n      ' +
