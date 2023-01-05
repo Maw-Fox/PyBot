@@ -12,7 +12,7 @@ DOC: dict[str, dict[str, complex]] = {}
 
 
 def load_doc() -> None:
-    f = open('hungry_doc.json', 'r', encoding='utf-8')
+    f = open('src/templates.json', 'r', encoding='utf-8')
     obj: dict[str, dict[str, complex]] = json.load(f)
     for name in obj:
         DOC[name] = obj[name]
@@ -422,7 +422,7 @@ class Setup:
         self.timeout: int = int(time()) + 300
         Setup.__setups[self] = Channel
 
-    def add_consent(self, character: GameCharacter) -> bool:
+    def add_consent(self, character: GameCharacter) -> None:
         self.need_consent.pop(self.need_consent.index(character))
         if not len(self.need_consent):
             self.channel.hungry = Game(
@@ -435,6 +435,13 @@ class Setup:
 
     def no_consent(self) -> None:
         Setup.__setups.pop(self)
+
+    @staticmethod
+    def get_instance_by_prey(character: GameCharacter):
+        for setup in Setup.__setups:
+            if character.name in setup.prey:
+                return setup
+        return None
 
     @staticmethod
     async def check_timeout(t: int) -> None:
@@ -498,7 +505,9 @@ class Game:
             return Game.characters.get(c.lower(), None)
         else:
             for char_string in c.copy():
-                char: GameCharacter | None = Game.characters.get(char_string)
+                char: GameCharacter | None = Game.characters.get(
+                    char_string.lower()
+                )
                 li.append(char)
             return li
 

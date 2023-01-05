@@ -512,8 +512,8 @@ class Command:
         ]) + '\n'
         '   [b]Hungry Game:[/b]\n      ' +
         '   '.join([
-            'hungry', 'create', 'buy', '[s]target[/s]', '[s]badge[/s]',
-            '[s]challenge[/s]', 'sheet', '[s]action[/s]', 'perks',
+            'hungry', 'create', 'buy', '[s]target[/s]', 'badge',
+            'challenge', 'sheet', '[s]action[/s]', 'perks',
             'abilities', 'refund'
         ]) + '\n'
     )
@@ -542,6 +542,62 @@ class Command:
             (c_s + c if c else '') +
             (ml_s + ml if ml else '') +
             (b_s + b if b else '')
+        )
+
+    @staticmethod
+    async def accept(
+        by: Character,
+        **kwargs
+    ) -> None:
+        output: Output = Output(recipient=by)
+        char: H.GameCharacter = H.Game.get_character(by.name)
+        if not char:
+            return await output.send(
+                '[b]Hungry Game[/b]: You don\'t have a character sheet.'
+            )
+        setup: H.Setup = H.Setup.get_instance_by_prey(char)
+        if not setup:
+            return await output.send(
+                '[b]Hungry Game[/b]: You\'re not being challenged.'
+            )
+        await output.send(
+            '[b]Hungry Game[/b]: You accepted the challenge.'
+        )
+        setup.add_consent(char)
+
+    @staticmethod
+    async def decline(
+        by: Character,
+        **kwargs
+    ) -> None:
+        output: Output = Output(recipient=by)
+        char: H.GameCharacter = H.Game.get_character(by.name)
+        if not char:
+            return await output.send(
+                '[b]Hungry Game[/b]: You don\'t have a character sheet.'
+            )
+        setup: H.Setup = H.Setup.get_instance_by_prey(char)
+        if not setup:
+            return await output.send(
+                '[b]Hungry Game[/b]: You\'re not being challenged.'
+            )
+        setup.no_consent()
+        await output.send(
+            '[b]Hungry Game[/b]: You declined the challenge.'
+        )
+        for prey in setup.prey:
+            prey_character: Character = get_char(prey.display_name)
+            out: Output = Output(recipient=prey_character)
+            await out.send(
+                '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
+                f'"{by.name}" declined the challenge.'
+            )
+
+        pred_character: Character = get_char(setup.pred.display_name)
+        out: Output = Output(recipient=pred_character)
+        await output.send(
+            '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
+            f'"{by.name}" declined the challenge.'
         )
 
     @staticmethod
@@ -920,20 +976,20 @@ class Command:
 
     @staticmethod
     async def yeeted(
-        chan: Channel,
+        channel: Channel,
         output: Output,
         **kwargs
     ) -> None:
-        time_last: int = chan.states.get('last', 0)
+        time_last: int = channel.states.get('last', 0)
         time_diff_state: int = int(time()) - time_last
 
         unique_kills: int = len(KILLS.keys())
         kills: int = sum(KILLS.values())
 
-        if not chan or time_diff_state < COMMAND_TIMEOUT:
+        if not channel or time_diff_state < COMMAND_TIMEOUT:
             return
 
-        chan.states['last'] = int(time())
+        channel.states['last'] = int(time())
 
         time_string: str = 'within the last [i]'
         time_string += get_time_str(UPTIME)
