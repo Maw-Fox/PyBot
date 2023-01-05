@@ -121,7 +121,7 @@
         "refund": "[b]Hungry Game[/b]: Refund all spent stat points and all spent ability/perk points. Requires confirmation.",
         "sheet": "[b]Hungry Game[/b]: A command to grab the character sheet of yourself, or a different character.\n[b]Usage[/b]:\n   \"[i]!sheet[/i]\" Prints our your character sheet.\n   \"[i]!sheet Kali[/i] Prints out \"Kali\"'s character sheet.\"",
         "buy": "[b]Hungry Game[/b]: A command to spend [i]perk points[/i], [i]ability points[/i] and [i]stat points[/i].\n[b]Usage[/b]:\n   \"[i]!buy perk 4 rage-fueled[/i]\": buy [i]4 levels[/i] of a [i]perk[/i] called [b]rage-fueled[/b]\"\n   \"[i]!buy stat 10 strength[/i]\": buy [i]10 points[/i] of the [b]strength[/b] [i]stat[/i]\n   \"[i]!buy ability heal[/i]\": buy [i]1 level[/i] of the [/b]heal[/b] [i]ability[/i].",
-        "challenge": "[b]Hungry Game[/b]: The command to \"throw down the gauntlet\" as it were! Be it to up to one, or up to five potentially unlucky prey! This command will request all the parties to consent to the challenge, and will begin the game if all accept. Keep in mind that these parties must have already created a [/b]Hungry Game[/b] character.\n[b]Usage[/b]:\n   \"[i]!challenge Kali[/i]\" Challenges \"Kali\", with the challenger taking on the pred role and \"Kali\" taking on the prey role.\n   \"[i]!challenge Kali, Kali2, Kali3, Kali4, Kali5[/i]\" Challenges all five participants into a single 1v5 fight.",
+        "challenge": "[b]Hungry Game[/b]: The command to \"throw down the gauntlet\" as it were! Be it to one, or up to five potentially unlucky prey! This command will request all the parties to consent to the challenge, and will begin the game if all accept. Keep in mind that these parties must have already created a [b]Hungry Game[/b] character.\n[b]Usage[/b]:\n   \"[i]!challenge Kali[/i]\" Challenges \"Kali\", with the challenger taking on the pred role and \"Kali\" taking on the prey role.\n   \"[i]!challenge Kali, Kali2, Kali3, Kali4, Kali5[/i]\" Challenges all five participants into a single 1v5 fight.",
         "target": "[b]Hungry Game[/b]: Target a person during an active game with an ability, mostly useful when your abilities have a specific target in mind.\n[b]Usage[/b]:\n   \"[i]!target kali, heal[/i]\" Targets \"Kali\" and sets your turn for this round to heal \"Kali\".",
         "action": "[b]Hungry Game[/b]: This command allows you to choose an ability to use during this round, one that doesn't require specific targets in mind.\n[b]Usage[/b]:\n   \"[i]!action attack[/i]\" Sets yourself to \"attack\" on this round, and you will perform a damage roll against a group of prey (preds do exclusiveely cleave/AOE damage), or a pred.",
         "badge": "[b]Hungry Game[/b]: Apply one of your badges to be the default badge shown next to your name in the UI. Badges are unlocked when you unlock \"Milestone Perks\"!\n[b]Usage[/b]:\n   \"[i]!badge raid boss[/i]\" Sets your default badge to the badge given by the \"raid boss\" acheivement perk.",
@@ -213,6 +213,7 @@
             }
         ],
         "create": [],
+        "accept": [],
         "action": [
             {
                 "name": "action",

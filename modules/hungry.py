@@ -1,12 +1,12 @@
 import json
+
+from os import path
 from random import random
 from time import time
 from math import floor, ceil
-from functools import singledispatch as default
-from os import path
+from modules.utils import log
+from modules.channel import Channel
 
-LAST_SNAPSHOT: int = int(time())
-SNAPSHOT_DELAY: int = 1200
 
 DOC: dict[str, dict[str, complex]] = {}
 
@@ -402,24 +402,77 @@ class ThirstyCharacter(GameCharacter):
         )
 
 
+class Setup:
+    __setups: dict = {}
+    __next_check: int = int(time()) + 60
+
+    def __init__(
+        self,
+        pred: GameCharacter,
+        prey: list[GameCharacter],
+        channel: Channel,
+        output
+    ):
+        self.pred: GameCharacter = pred
+        self.prey: list[GameCharacter] = prey
+        self.need_consent = list[GameCharacter] = prey
+        self.channel: Channel = channel
+        self.output = output
+        channel.setup = True
+        self.timeout: int = int(time()) + 300
+        Setup.__setups[self] = Channel
+
+    def add_consent(self, character: GameCharacter) -> bool:
+        self.need_consent.pop(self.need_consent.index(character))
+        if not len(self.need_consent):
+            self.channel.hungry = Game(
+                self.pred,
+                self.prey,
+                self.channel,
+                self.output
+            )
+            self.channel.setup = False
+
+    def no_consent(self) -> None:
+        Setup.__setups.pop(self)
+
+    @staticmethod
+    async def check_timeout(t: int) -> None:
+        if not len(Setup.__setups):
+            return
+        if Setup.__next_check > t:
+            return
+        Setup.__next_check += t + 60
+
+        for setup in Setup.__setups:
+            if setup.timeout < t:
+                setup.channel.setup = False
+                Setup.__setups.pop(setup)
+                await setup.output.send(
+                    '[b]Hungry Game[/b]: Setup phase timed out, aborting game.'
+                )
+
+
 class Game:
+    snapshot_last: int = 0
+    SNAPSHOT_DELAY: int = 600
     characters: dict[str, GameCharacter] = {}
 
     def __init__(
         self,
-        pred: str,
-        prey: list[str],
-        channel: str,
-        challenger: HungryCharacter | ThirstyCharacter
+        pred: GameCharacter,
+        prey: list[GameCharacter],
+        channel: Channel,
+        output
     ):
-        pred_character: HungryCharacter = Game.get_character(pred)
-        prey_characters: HungryCharacter = Game.get_character(prey)
-        self.pred: HungryCharacter = pred_character
-        self.prey: list[ThirstyCharacter] = prey_characters
-        self.channel: str = channel
-        self.challenger: HungryCharacter | ThirstyCharacter = challenger
+        pred: HungryCharacter = pred
+        prey: list[HungryCharacter] = prey
+        self.channel: Channel = channel
+        channel.hungry = self
         self.rounds: list[Round] = []
         self.round: Round = Round(self.pred, self.prey)
+        self.rounds.append(self.round)
+        self.output = output
 
     @staticmethod
     def game_characters(
@@ -446,20 +499,19 @@ class Game:
         else:
             for char_string in c.copy():
                 char: GameCharacter | None = Game.characters.get(char_string)
-                if not char:
-                    return None
                 li.append(char)
             return li
 
     @staticmethod
     def check_save(t: int) -> None:
-        if t - LAST_SNAPSHOT > SNAPSHOT_DELAY:
+        if t - Game.snapshot_last > Game.SNAPSHOT_DELAY:
+            Game.snapshot_last = t
             return Game.save_characters()
 
     @staticmethod
     def save_characters() -> None:
         save_state: dict = {}
-
+        log('HNG/SAV')
         for name in Game.characters:
             perk: dict[str, int] = {}
             ability: dict[str, int] = {}

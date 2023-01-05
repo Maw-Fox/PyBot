@@ -89,11 +89,11 @@ class Socket:
                         AUTH.check_ticket()
                         H.Game.check_save(t)
                         if t - CHECK['last'] > CHECK['every']:
-                            CHECK['last'] = t
                             for char in KILLS_LAST.copy():
                                 ts: int = KILLS_LAST[char]
                                 if ts < t - CHECK['clear']:
                                     KILLS_LAST.pop(char)
+                            CHECK['last'] = t
                     await self.read(code, data)
                 except Exception as error:
                     log('WEB/ERR', str(error))
@@ -117,6 +117,41 @@ def get_time_str(t: int) -> str:
 
 
 class Response:
+    # user -> {channels, last}
+    __CIU: dict[str, dict[str, int | list[str]]] = {}
+    requester: str | None = None
+
+    async def CIU(data) -> None:
+        character_name: str = data['sender']
+        output: Output = Output(recipient=character_name)
+        t: int = int(time())
+        char_data = Response.__CIU.get(character_name)
+        if data['name'].lower()[:3] != 'adh':
+            return await output(
+                '[b]No.[/b]'
+            )
+        log('CHA/INV', data['sender'], data['name'])
+        if char_data:
+            last_t: int = char_data.get('last', t)
+            channels: list[str] = char_data.get('channels')
+            if data['name'] in channels:
+                return await output(
+                    'You\'ve tried this already, [b]no means no[/b].'
+                )
+            if t - last_t < 900:
+                return await output(
+                    'Please wait at least 15 minutes before attempting to ' +
+                    'invite the bot again.'
+                )
+        Response.requester: str = data['sender']
+        Channel(data['name'])
+        SOCKET.send(
+            'JCH',
+            {
+                'channel': data['name']
+            }
+        )
+
     async def ERR(data) -> None:
         log('ERR/ANY', json.dumps(data))
 
@@ -144,11 +179,28 @@ class Response:
 
     async def COL(data) -> None:
         chan: Channel = get_chan(data['channel'])
+
         for char_str in data['oplist']:
             if not char_str:
                 continue
 
             chan.add_op(char_str)
+
+        if Response.requester:
+            if chan.is_op(Response.requester):
+                Response.requester = None
+                return
+            await Output(recipient=Response.requester).send(
+                'You are not an op in this channel and cannot invite the bot.'
+            )
+            chan.remove()
+            Response.requester = None
+            return await SOCKET.send(
+                'LCH',
+                {
+                    'channel': chan.name
+                }
+            )
 
     async def JCH(data) -> None:
         char: Character = get_char(data['character']['identity'])
@@ -159,7 +211,9 @@ class Response:
 
         chan.add_char(char)
 
-        if not chan.states.get('yeetus', True):
+        if not chan.states.get('yeetus', False) and (
+            chan.name not in CONFIG.joined_channels
+        ):
             return
 
         response = requests.post(
@@ -491,6 +545,80 @@ class Command:
         )
 
     @staticmethod
+    async def challenge(
+        by: Character,
+        character: list[str],
+        channel: Channel,
+        output: Output,
+        **kwargs
+    ) -> None:
+        pred_output: Output = Output(recipient=by)
+        prey: list[H.GameCharacter] = H.Game.get_character(character)
+        pred: H.GameCharacter = H.Game.get_character(by.name)
+        if not channel:
+            return await output.send(
+                '[b]Hungry Game[/b]: [color=red]Failed![/color]' +
+                ' You must use this command in a channel.'
+            )
+        if channel.name in CONFIG.joined_channels:
+            return await pred_output.send(
+                '[b]Hungry Game[/b]: [color=red]Failed![/color]' +
+                ' Not in an appropriate channel.'
+            )
+        if channel.hungry:
+            return await output.send(
+                '[b]Hungry Game[/b]: [color=red]Failed![/color]' +
+                ' A game is already in session!'
+            )
+        for idx in range(len(prey)):
+            p: H.GameCharacter | None = prey[idx]
+            p_name: str = character[idx]
+            if not p:
+                return await output.send(
+                    '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
+                    f'\"{p_name}\" doesn\'t have a character sheet.'
+                )
+        for p in prey:
+            await Output(recipient=get_char(p.display_name)).send(
+                f'[b]Hungry Game[/b]: {pred.display_name} has challenged you' +
+                ' to a game of [b]Hungry Game[/b] in the '
+                f'"{channel.title}" channel! Type "[i][b]!accept[/b][/i]"' +
+                ' to accept the challenge, or "[i][b]!decline[/b][/i]"' +
+                ' to decline the challenge!'
+            )
+
+        H.Setup(
+            pred=pred,
+            prey=prey,
+            channel=channel,
+            output=output
+        )
+
+    @staticmethod
+    async def badge(
+        by: Character,
+        perk: str = '',
+        **kwargs
+    ) -> None:
+        perk = perk.lower()
+        output: Output = Output(recipient=by)
+        char: H.GameCharacter = H.Game.get_character(by.name)
+
+        if not char.perks.get(perk):
+            return await output.send(
+                f'[b]Hungry Game[/b]: You don\'t have the \"{perk}\" perk.'
+            )
+        if not char.perks[perk].get('badge'):
+            return await output.send(
+                f'[b]Hungry Game[/b]: The \"{perk}\" perk isn\'t an ' +
+                'acheivement/milestone perk.'
+            )
+        char.badge = char.perks[perk]['badge']
+        return await output.send(
+            f'[b]Hungry Game[/b]: Success! Badge set!'
+        )
+
+    @staticmethod
     async def refund(
         by: Character,
         **kwargs
@@ -641,10 +769,10 @@ class Command:
         **kwargs
     ) -> None:
         output: Output = Output(recipient=by)
-        help: str = Command.help.get(sub_command)
+        help: str = Command.doc.get(sub_command)
         if not help:
             return await output.send(
-                Command.help['help']
+                Command.doc['help']
             )
         return await output.send(
             help

@@ -10,6 +10,8 @@ class Channel:
         self.title: str = name
         self.characters: dict[str, Character] = {}
         self.ops: dict[str, int] = {}
+        self.hungry = None
+        self.setup: bool = False
         CHANNELS[self.name] = self
         self.states: dict[str, complex] = {}
 
@@ -29,6 +31,9 @@ class Channel:
 
     def is_op(self, s_character: str) -> bool:
         return bool(self.ops.get(s_character))
+
+    def remove(self) -> None:
+        CHANNELS.pop(self.name)
 
 
 CHANNELS: dict[str, Channel] = {}
