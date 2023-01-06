@@ -225,6 +225,10 @@ class Response:
             }
         )
 
+        if response.status_code != 200:
+            log(f'JCH/{response.status_code}')
+            return
+
         response = json.loads(response.text)
 
         if not response.get('infotags'):

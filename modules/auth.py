@@ -39,7 +39,7 @@ class Auth:
         else:
             print(f'Error getting ticket, code: {response.status_code}')
             sleep(1)
-            self.__get_new_auth_ticket()
+            self.get_new_auth_ticket()
 
 
 AUTH: Auth = Auth()
