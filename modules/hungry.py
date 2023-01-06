@@ -171,7 +171,7 @@ class Modifier:
             'add_damage_buffer': 0,
             'mod_damage_buffer': 1.0,
             'add_evasion': 0,
-            'mod_evasion': 0,
+            'mod_evasion': 1.0,
             'add_damage': 0,
             'mod_damage': 1.0
     }
@@ -360,6 +360,7 @@ class HungryCharacter(GameCharacter):
             99,
             indefinite=True
         )
+        self.current_damage_buffer: int = 0
 
 
 class ThirstyCharacter(GameCharacter):
@@ -394,6 +395,7 @@ class ThirstyCharacter(GameCharacter):
             abilities,
             badge
         )
+        self.current_damage_buffer: int = 0
 
 
 class Setup:
@@ -504,11 +506,18 @@ class Game:
                     badge=p.badge
                 )
             )
+        self.pred.current_damage_buffer = Game.modded_damage_buffer(self.pred)
+        for p in self.prey:
+            p.current_damage_buffer = Game.modded_damage_buffer(p)
         self.channel: Channel = channel
         channel.hungry = self
         self.output = output
+        self.dead: list[ThirstyCharacter] = []
         # Setting last active time.
         GAMES[self] = int(time())
+        self.initiative: list[GameCharacter] = []
+        self.reset_initiative()
+        self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
         UI.draw_game(self)
 
     @staticmethod
@@ -661,6 +670,19 @@ class Game:
             )
         )
 
+    @staticmethod
+    def modded_damage_buffer(
+        character: GameCharacter
+    ) -> int:
+        vitality: int = Game.get_modded_vitality(character)
+        return (
+            floor(
+                character.modifiers.get('add_damage_buffer') + (
+                    Game.__get_damage_buffer(vitality)
+                ) * character.modifiers.get('mod_damage_buffer')
+            )
+        )
+
     # Damage stats template:
     # die, faces, mod, crit
     @staticmethod
@@ -681,12 +703,92 @@ class Game:
         ability: CharacterAbility,
         target: list[GameCharacter] | GameCharacter | None = None
     ) -> None:
+        event_parameters: dict[str, int] = {
+            'type': None,
+            'targets': [],
+            'deltas': [],
+            'pre_deltas': [],
+            'rolls': [],
+            'evaded': []
+        }
+
         if ability.name == 'attack':
+            event_parameters['type'] = 'attack'
             if type(char) == ThirstyCharacter:
                 target: HungryCharacter = self.pred
-
+                t_v = Game.get_modded_vitality(target)
+                t_a = Game.get_modded_agility(target)
+                t_hp, t_m_hp = Game.get_modded_hp(target)
+                t_dr = Game.get_modded_damage_reduction(target, t_v)
+                t_ev = Game.get_modded_evasion(target, t_a)
+                s, a, v = Game.get_modded_stats(char)
+                d, f, m, c = Game.get_damage_stats(s, a)
+                damage: int = 0
+                if ceil(random() * 100) < c:
+                    d += 1
+                for idx in range(d):
+                    result: int = ceil(random() * f)
+                    damage += result
+                    event_parameters['rolls'].append(result)
+                damage += m
+                if target.current_damage_buffer:
+                    diff: int = damage - target.current_damage_buffer
+                    target.current_damage_buffer = -diff if diff < 0 else 0
+                    damage = max(diff, 0)
+                damage = max(damage - t_dr, 0)
+                event_parameters['pre_deltas'].append(t_hp)
+                event_parameters['deltas'].append(
+                    damage
+                )
+                if t_ev and ceil(random() * 100) < t_ev:
+                    event_parameters['evaded'].append(True)
+                else:
+                    event_parameters['evaded'].append(False)
+                    if t_hp - damage <= 0:
+                        target.hp = 0.0
+                        self.died(target)
+                        return self.game_over(
+                            pred_win=False
+                        )
+                    target.hp -= damage
+                UI.draw_game(self, event_parameters)
             else:
-                target: list[ThirstyCharacter] = self.prey
+                targets: list[ThirstyCharacter] = self.prey
+                s, a, v = Game.get_modded_stats(char)
+                d, f, m, c = Game.get_damage_stats(s, a)
+                for target in targets:
+                    t_v = Game.get_modded_vitality(target)
+                    t_a = Game.get_modded_agility(target)
+                    t_hp, t_m_hp = Game.get_modded_hp(target)
+                    t_dr = Game.get_modded_damage_reduction(target, t_v)
+                    t_ev = Game.get_modded_evasion(target, t_a)
+                    damage: int = 0
+                    if ceil(random() * 100) < c:
+                        d += 1
+                    for idx in range(d):
+                        result: int = ceil(random() * f)
+                        damage += result
+                        event_parameters['rolls'].append(result)
+                    damage += m
+                    if target.current_damage_buffer:
+                        diff: int = damage - target.current_damage_buffer
+                        target.current_damage_buffer = -diff if diff < 0 else 0
+                        damage = max(diff, 0)
+                    damage = max(damage - t_dr, 0)
+                    event_parameters['pre_deltas'].append(t_hp)
+                    event_parameters['deltas'].append(
+                        damage
+                    )
+                    if t_ev and ceil(random() * 100) < t_ev:
+                        event_parameters['evaded'].append(True)
+                    else:
+                        event_parameters['evaded'].append(False)
+                        if t_hp - damage <= 0:
+                            target.hp = 0.0
+                            self.died(target)
+                        target.hp -= damage
+                UI.draw_game(self, event_parameters)
+        self.next()
 
     """
     Update with dictionary of changes, dict template:
@@ -696,17 +798,38 @@ class Game:
     def update(self) -> None:
         pass
 
+    def next(self) -> None:
+        pass
+
+    def died(self, character: GameCharacter) -> None:
+        character.deceased = True
+        try:
+            idx: int = self.initiative.index(character)
+            self.initiative.pop(idx)
+        except ValueError:
+            return
+
+    def game_over(self, pred_win: bool) -> None:
+        pass
+
     @staticmethod
     def update_cooldowns(character: GameCharacter) -> None:
         character.update_cooldowns()
         character.update_statuses()
 
-    def reset_initiative(self) -> list[ThirstyCharacter | HungryCharacter]:
+    def reset_initiative(self) -> None:
         self.initiative = self.prey.copy()
         self.initiative.append(self.pred)
+        select: int = 0
+        for idx in range(len(self.initiative)):
+            if self.initiative[select].deceased:
+                continue
+            self.initiative.pop(select)
+            select += 1
         self.initiative: list[ThirstyCharacter | HungryCharacter] = sorted(
             self.initiative, lambda char: char.agility
         )
+        self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
 
     @staticmethod
     def game_characters(
