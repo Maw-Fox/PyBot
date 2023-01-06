@@ -811,6 +811,9 @@ class Command:
         char = H.GameCharacter = H.GameCharacter(
             name=by.name
         )
+
+        H.Game.add_character(char.name, char)
+
         out_str: str = H.UI.sheet(character=char)
         return await output.send(
             f'{out_str}\nYou have created a new character for ' +
