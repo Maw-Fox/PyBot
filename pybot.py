@@ -575,7 +575,6 @@ class Command:
             return await output.send(
                 '[b]Hungry Game[/b]: You don\'t have a character sheet.'
             )
-        print(char, by.name)
         setup: H.Setup = H.Setup.get_instance_by_prey(char)
         if not setup:
             return await output.send(
@@ -599,7 +598,6 @@ class Command:
         **kwargs
     ) -> None:
         pred_output: Output = Output(recipient=by)
-        print(character)
         prey: list[H.GameCharacter] = H.Game.get_character(character)
         pred: H.GameCharacter = H.Game.get_character(by.name)
         if not channel:

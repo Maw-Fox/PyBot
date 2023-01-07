@@ -426,7 +426,6 @@ class Setup:
         self.channel: Channel = channel
         self.output = output
         channel.setup = True
-        print(self.__dict__)
         self.timeout: int = int(time()) + 300
         SETUPS[self] = Channel
 
