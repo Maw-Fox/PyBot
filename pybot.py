@@ -76,7 +76,6 @@ class Socket:
                             parameters = json.dumps({
                                 'channel': channel
                             })
-                            Channel(channel)
                             await websocket.send(
                                 f'JCH {parameters}'
                             )
@@ -144,8 +143,7 @@ class Response:
                     'invite the bot again.'
                 )
         Response.requester: str = data['sender']
-        Channel(data['name'])
-        SOCKET.send(
+        return await SOCKET.send(
             'JCH',
             {
                 'channel': data['name']
@@ -190,7 +188,7 @@ class Response:
             if chan.is_op(Response.requester):
                 Response.requester = None
                 return
-            await Output(recipient=Response.requester).send(
+            await Output(recipient=get_char(Response.requester)).send(
                 'You are not an op in this channel and cannot invite the bot.'
             )
             chan.remove()
@@ -205,9 +203,6 @@ class Response:
     async def JCH(data) -> None:
         char: Character = get_char(data['character']['identity'])
         chan: Channel = get_chan(data['channel'])
-
-        if not chan:
-            chan: Channel = Channel(data['channel'])
 
         chan.add_char(char)
 
@@ -580,6 +575,7 @@ class Command:
             return await output.send(
                 '[b]Hungry Game[/b]: You don\'t have a character sheet.'
             )
+        print(char, by.name)
         setup: H.Setup = H.Setup.get_instance_by_prey(char)
         if not setup:
             return await output.send(
@@ -589,19 +585,9 @@ class Command:
         await output.send(
             '[b]Hungry Game[/b]: You declined the challenge.'
         )
-        for prey in setup.prey:
-            prey_character: Character = get_char(prey.display_name)
-            out: Output = Output(recipient=prey_character)
-            await out.send(
-                '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
-                f'"{by.name}" declined the challenge.'
-            )
-
-        pred_character: Character = get_char(setup.pred.display_name)
-        out: Output = Output(recipient=pred_character)
-        await output.send(
+        await setup.output.send(
             '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
-            f'"{by.name}" declined the challenge.'
+            f'"{char.display_name}" declined the challenge.'
         )
 
     @staticmethod
@@ -613,6 +599,7 @@ class Command:
         **kwargs
     ) -> None:
         pred_output: Output = Output(recipient=by)
+        print(character)
         prey: list[H.GameCharacter] = H.Game.get_character(character)
         pred: H.GameCharacter = H.Game.get_character(by.name)
         if not channel:

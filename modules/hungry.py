@@ -76,7 +76,6 @@ class GameCharacter():
             self.abilities,
             abilities
         )
-        Game.add_character(self.name, self)
 
     def build_perkbilities(self, cls, new_li: dict, li: dict[str, int]):
         for name in li:
@@ -352,20 +351,19 @@ class HungryCharacter(GameCharacter):
         badge: str = ''
     ):
         super().__init__(
-            self,
-            name,
-            level,
-            strength,
-            agility,
-            vitality,
-            stat_alloc,
-            perk_alloc,
-            ability_alloc,
-            wins,
-            losses,
-            perks,
-            abilities,
-            badge
+            name=name,
+            level=level,
+            strength=strength,
+            agility=agility,
+            vitality=vitality,
+            stat_alloc=stat_alloc,
+            perk_alloc=perk_alloc,
+            ability_alloc=ability_alloc,
+            wins=wins,
+            losses=losses,
+            perks=perks,
+            abilities=abilities,
+            badge=badge
         )
         self.status_effects['Pred'] = CharacterStatus(
             self,
@@ -395,19 +393,19 @@ class ThirstyCharacter(GameCharacter):
         badge: str = ''
     ):
         super().__init__(
-            name,
-            level,
-            strength,
-            agility,
-            vitality,
-            stat_alloc,
-            perk_alloc,
-            ability_alloc,
-            wins,
-            losses,
-            perks,
-            abilities,
-            badge
+            name=name,
+            level=level,
+            strength=strength,
+            agility=agility,
+            vitality=vitality,
+            stat_alloc=stat_alloc,
+            perk_alloc=perk_alloc,
+            ability_alloc=ability_alloc,
+            wins=wins,
+            losses=losses,
+            perks=perks,
+            abilities=abilities,
+            badge=badge
         )
         self.current_damage_buffer: int = 0
 
@@ -424,10 +422,11 @@ class Setup:
     ):
         self.pred: GameCharacter = pred
         self.prey: list[GameCharacter] = prey
-        self.need_consent = list[GameCharacter] = prey
+        self.need_consent: list[GameCharacter] = prey
         self.channel: Channel = channel
         self.output = output
         channel.setup = True
+        print(self.__dict__)
         self.timeout: int = int(time()) + 300
         SETUPS[self] = Channel
 
@@ -448,7 +447,7 @@ class Setup:
     @staticmethod
     def get_instance_by_prey(character: GameCharacter):
         for setup in SETUPS:
-            if character.name in setup.prey:
+            if character in setup.prey:
                 return setup
         return None
 
@@ -498,8 +497,8 @@ class Game:
             ability_alloc=pred.ability_alloc,
             wins=pred.wins,
             losses=pred.losses,
-            perks=pred.perks,
-            abilities=pred.abilities,
+            perks=self.get_perkability_level_dict(pred.perks),
+            abilities=self.get_perkability_level_dict(pred.abilities),
             badge=pred.badge
         )
         self.prey: list[ThirstyCharacter] = []
@@ -516,8 +515,8 @@ class Game:
                     ability_alloc=p.ability_alloc,
                     losses=p.losses,
                     wins=p.wins,
-                    perks=p.perks,
-                    abilities=p.abilities,
+                    perks=self.get_perkability_level_dict(p.perks),
+                    abilities=self.get_perkability_level_dict(p.abilities),
                     badge=p.badge
                 )
             )
@@ -544,6 +543,15 @@ class Game:
         self.reset_initiative()
         self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
         UI.draw_game(self)
+
+    @staticmethod
+    def get_perkability_level_dict(
+        perks: dict[str, CharacterPerk | CharacterAbility]
+    ) -> dict[str, int]:
+        obj: dict[str, int] = {}
+        for perk_name, perk in perks.items():
+            obj[perk_name] = perk.level
+        return obj
 
     @staticmethod
     def get_modded_hp(character: GameCharacter) -> tuple[int, int]:
@@ -671,9 +679,9 @@ class Game:
     ) -> int:
         return (
             floor(
-                character.modifiers.get('add_damage_reduction') + (
+                character.modifiers.get('add_damage_reduction', 0) + (
                     Game.__get_damage_reduction(vitality)
-                ) * character.modifiers.get('mod_damage_reduction')
+                ) * character.modifiers.get('mod_damage_reduction', 1.0)
             )
         )
 
@@ -744,7 +752,7 @@ class Game:
             for target in targets:
                 t_v = Game.get_modded_vitality(target)
                 t_a = Game.get_modded_agility(target)
-                t_hp, t_m_hp = Game.get_modded_hp(target)
+                t_hp, t_hp_m = Game.get_modded_hp(target)
                 t_dr = Game.get_modded_damage_reduction(target, t_v)
                 t_ev = Game.get_modded_evasion(target, t_a)
                 damage: int = 0
@@ -770,7 +778,7 @@ class Game:
                 else:
                     event_parameters['evaded'].append(False)
 
-                target.hp = float(max((t_hp - damage) / t_m_hp, 0.0))
+                target.hp = float(max((t_hp - damage) / t_hp_m, 0.0))
                 if target.hp <= 0.0:
                     self.died(target)
         elif ability.name == 'heal':
@@ -787,7 +795,14 @@ class Game:
         elif ability.name == 'defend':
             a_dr: int = ability.modified['add_damage_reduction']
             a_db: int = ability.modified['add_damage_buffer']
+            st_delta: int = ability.modified['add_stamina']
+            st, st_m = Game.get_modded_stamina(char)
+            event_parameters['pre_deltas'].append(st)
+            event_parameters['deltas'].append(st_delta)
             char.current_damage_buffer += a_db
+            char.stamina = float(
+                max(st + st_delta) / st_m
+            )
             CharacterStatus(
                 char,
                 'Defend',
@@ -799,7 +814,13 @@ class Game:
                 }
             )
         else:
-            pass
+            st_delta: int = ability.modified['add_stamina']
+            st, st_m = Game.get_modded_stamina(char)
+            event_parameters['pre_deltas'].append(st)
+            event_parameters['deltas'].append(st_delta)
+            char.stamina = float(
+                max(st + st_delta) / st_m
+            )
         if not self.active:
             event_parameters['game_over'] = True
             return await UI.draw_game(self, event_parameters)
@@ -884,7 +905,7 @@ class Game:
                 continue
             select += 1
         self.initiative: list[ThirstyCharacter | HungryCharacter] = sorted(
-            self.initiative, lambda char: char.agility
+            self.initiative, key=lambda char: char.agility
         )
         self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
 

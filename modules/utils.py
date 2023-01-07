@@ -92,8 +92,8 @@ def get_char(character: str) -> Character | None:
     return GLOBAL_CHARACTER_LIST.get(character, Character(character))
 
 
-def get_chan(channel: str) -> Channel | None:
-    return CHANNELS.get(channel)
+def get_chan(channel: str) -> Channel:
+    return CHANNELS.get(channel) or Channel(channel)
 
 
 def remove_all(character: Character) -> None:
