@@ -58,7 +58,7 @@ class Verify:
             f'https://static.f-list.net/images/eicon/{self.check}.gif'
         )
         etag: str = response.headers.get('etag')
-        if etag == '639d154d-16c3':
+        if etag.split('-')[1] == '16c3':
             # This isn't a valid eicon.
             return
         mime: str = response.headers.get('content-type')
@@ -77,7 +77,6 @@ class Verify:
             Verify.exists = dict(
                 sorted(Verify.exists.items(), key=lambda x: x[0])
             )
-            print(Verify.exists)
             for name in Verify.exists:
                 name, ext, last = Verify.exists[name]
                 buffer += f'{name},{ext},{last}\n'
@@ -154,7 +153,6 @@ class Socket:
                             CHECK['last'] = t
                     await self.read(code, data)
                 except Exception as error:
-                    raise Exception
                     log('WEB/ERR', str(error))
 
     async def close(self) -> None:
@@ -1179,24 +1177,26 @@ class Command:
         output: Output = Output(recipient=by)
         result: list[str] = []
         names: list[str] = Verify.exists.keys()
-        if len(search) <= 1:
-            return await output.send(
-                '[b]Error[/b]: Search pattern must be greater than 1 ' +
-                'character in length.'
-            )
+        t_len: int = 100
+        T_MAX: int = 50000
+        hit_cap: bool = False
         for name in names:
             mime: str = Verify.exists[name][1]
             if search in name:
                 if filetype and filetype != mime:
                     continue
+                t_len += len(name) + 16
                 result.append(name)
-                if len(result) == 200:
+                if t_len + 32 > T_MAX:
+                    hit_cap = True
                     break
 
         await output.send(
-            f'[b]Search Results ([i]{len(result)}[/i])[/b]:\n[spoiler]' +
-            '   '.join([f'[eicon]{x}[/eicon]' for x in result]) +
-            '[/spoiler]'
+            f'[b]Search Results ([i]{len(result)}[/i]/{len(Verify.exists)})' +
+            '[/b]:\n[spoiler]' +
+            ''.join([f'[eicon]{x}[/eicon]' for x in result]) +
+            '[/spoiler]' +
+            (f'\n[b]Warning[/b]: Hit DM char cap.' if hit_cap else '')
         )
 
     @staticmethod
