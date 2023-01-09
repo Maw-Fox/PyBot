@@ -46,7 +46,7 @@ def get_exists() -> dict[str, tuple[str, str, int]]:
 class Verify:
     queue: list = []
     next: float = time() + 1.5
-    save: float = time() + 3.0
+    save: float = time() + 300.0
     exists: dict[str, tuple[str, str, int]] = get_exists()
 
     def __init__(self, check: str):
