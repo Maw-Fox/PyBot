@@ -3,9 +3,9 @@ import json
 import requests
 import os
 import re
-import csv
 
 import modules.hungry as H
+from hashlib import md5
 from time import time
 from math import floor
 from websockets.client import connect
@@ -44,6 +44,7 @@ def get_exists() -> dict[str, tuple[str, str, int]]:
 
 
 class Verify:
+    HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
     queue: list = []
     next: float = time() + 1.5
     save: float = time() + 300.0
@@ -57,10 +58,15 @@ class Verify:
         response = requests.get(
             f'https://static.f-list.net/images/eicon/{self.check}.gif'
         )
-        etag: str = response.headers.get('etag')
-        if etag.split('-')[1] == '16c3':
-            # This isn't a valid eicon.
+
+        file_hash: str = md5(
+            response.content, usedforsecurity=False
+        ).hexdigest()
+
+        if file_hash == Verify.HASH_404:
+            # This file is a 404 redirect.
             return
+
         mime: str = response.headers.get('content-type')
         mime = mime.split('/')[1]
         log('IDB/ADD', f'{self.check}.{mime}')
