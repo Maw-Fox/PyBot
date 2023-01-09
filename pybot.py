@@ -39,7 +39,7 @@ def get_exists() -> dict[str, tuple[str, str, int]]:
     lines: list[str] = f.read()[:-1].split('\n')
     for line in lines:
         name, extension, last_verified = line.split(',')
-        obj[name] = (name, extension, last_verified)
+        obj[name] = (name, extension, int(last_verified))
     return obj
 
 
