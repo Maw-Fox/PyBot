@@ -375,7 +375,7 @@ class Pred(Character):
             self.modifiers.get('add_stamina_max', 0) + 100 +
             floor(self.vit / 5) * 15
         )
-        self.crit = (10 + floor(self.agi / 5) * 12.5) % 100
+        self.crit = floor(10 + floor(self.agi / 5) * 12.5) % 100
         self.die = (
             1 + floor((30 + floor(self.agi / 5) * 12.5) / 100) +
             floor(self.agi / 15)

@@ -3,6 +3,7 @@ import json
 import requests
 import os
 import re
+import csv
 
 import modules.hungry as H
 from time import time
@@ -32,6 +33,58 @@ CHECK: dict[str, int] = {
 }
 
 
+def get_exists() -> dict[str, tuple[str, str, int]]:
+    obj: dict[str, tuple[str, str, int]] = {}
+    f = open('data/eicon_db.csv', 'r', encoding='utf-8')
+    for line in f.readlines():
+        name, extension, last_verified = line.split(',')
+        obj[name] = (name, extension, last_verified)
+    return obj
+
+
+class Verify:
+    queue: list = []
+    next: float = time() + 1.5
+    save: float = time() + 300.0
+    exists: dict[str, tuple[str, str, int]] = get_exists()
+
+    def __init__(self, check: str):
+        self.check: str = check
+        Verify.queue.append(self)
+
+    def do(self) -> None:
+        response = requests.get(
+            f'https://static.f-list.net/images/eicon/{self.check}.gif'
+        )
+        etag: str = response.headers.get('etag')
+        if etag == '639d154d-16c3':
+            # This isn't a valid eicon.
+            return
+        mime: str = response.headers.get('content-type')
+        mime = mime.split('/')[1]
+        log('IDB/ADD', f'{self.check}.{mime}')
+        Verify.exists[self.check] = (self.check, mime, int(time()))
+
+    @staticmethod
+    def cycle() -> None:
+        t: float = time()
+        if t > Verify.save:
+            log('IDB/SAV')
+            Verify.save = t + 300.0
+            buffer: str = ''
+            f = open('data/eicon_db.csv', 'w', encoding='utf-8')
+            for name in Verify.exists:
+                name, ext, last = Verify.exists[name]
+                buffer += f'{name},{ext},{last}\n'
+            f.write(buffer)
+            f.close()
+        if not len(Verify.queue):
+            return
+        if t > Verify.next:
+            Verify.next = t + 1.5
+            Verify.queue.pop(0).do()
+
+
 class Socket:
     def __init__(self) -> None:
         self.current = None
@@ -39,7 +92,7 @@ class Socket:
 
     async def read(self, code, data) -> None:
         ign: dict[str, int] = {
-            'FLN': 1, 'LIS': 1, 'NLN': 1, 'PIN': 1
+            'FLN': 1, 'LIS': 1, 'NLN': 1, 'PIN': 1, 'STA': 1
         }
         if hasattr(Response, code):
             if not ign.get(code, 0):
@@ -71,6 +124,7 @@ class Socket:
                     data = message[4:]
 
                     await Queue.cycle()
+                    Verify.cycle()
                     if not self.initialized:
                         for channel in CONFIG.joined_channels:
                             parameters = json.dumps({
@@ -95,6 +149,7 @@ class Socket:
                             CHECK['last'] = t
                     await self.read(code, data)
                 except Exception as error:
+                    raise Exception
                     log('WEB/ERR', str(error))
 
     async def close(self) -> None:
@@ -149,6 +204,20 @@ class Response:
                 'channel': data['name']
             }
         )
+
+    async def STA(data) -> None:
+        if not data['statusmsg']:
+            return
+        matches: list[tuple[str, str, str]] = re.findall(
+            '(\\[eicon\\])([^\\[\\]]+)(\\[/eicon\\])',
+            data['statusmsg']
+        )
+        if not matches:
+            return
+        for m in matches:
+            if Verify.exists.get(m[1]):
+                continue
+            Verify(m[1])
 
     async def ERR(data) -> None:
         log('ERR/ANY', json.dumps(data))
@@ -449,7 +518,7 @@ class Parser:
             if not buffer and not arg.get('optional'):
                 built_args['error'] = (
                     'Missing required parameter "' +
-                    arg.name + '".'
+                    arg['name'] + '".'
                 )
                 return built_args
             if not buffer and arg.get('optional'):
@@ -457,12 +526,15 @@ class Parser:
             if arg.get('one of'):
                 expects: list = arg.get('one of')
                 first: str = exploded[0].lower()
-                if not expects[first] and not arg.get('optional'):
+                if first not in expects and not arg.get('optional'):
                     built_args['error'] = (
                         f'Invalid argument "{name}", ' +
                         'must be one of: ' + ', '.join(expects) + '.'
                     )
                     return built_args
+                if first not in expects:
+                    built_args[name] = ''
+                    continue
                 built_args[name] = first
             if arg.get('multi'):
                 if T == 'list':
@@ -509,7 +581,7 @@ class Command:
         'to see more information regarding these commands.\n' +
         '   [b]General:[/b]\n      ' +
         '   '.join([
-            'logs', 'yeetus', 'yeeted', '[b]help[/b]'
+            'logs', 'yeetus', 'yeeted', '[b]help[/b]', 'eicon'
         ]) + '\n'
         '   [b]Hungry Game:[/b]\n      ' +
         '   '.join([
@@ -1088,6 +1160,38 @@ class Command:
                 f'a total of [b]{kills}[/b] time(s) ' +
                 time_string
             )
+        )
+
+    @staticmethod
+    async def eicon(
+        by: Character,
+        search: str,
+        filetype: str,
+        **kwargs
+    ) -> None:
+        filetype = filetype.lower()
+        search = search.lower()
+        output: Output = Output(recipient=by)
+        result: list[str] = []
+        names: list[str] = Verify.exists.keys()
+        if len(search) <= 1:
+            return await output.send(
+                '[b]Error[/b]: Search pattern must be greater than 1 ' +
+                'character in length.'
+            )
+        for name in names:
+            mime: str = Verify.exists[name][1]
+            if search in name:
+                if filetype and filetype != mime:
+                    continue
+                result.append(name)
+                if len(result) == 200:
+                    break
+
+        await output.send(
+            f'[b]Search Results ([i]{len(result)}[/i])[/b]:\n[spoiler]' +
+            '   '.join([f'[eicon]{x}[/eicon]' for x in result]) +
+            '[/spoiler]'
         )
 
     @staticmethod

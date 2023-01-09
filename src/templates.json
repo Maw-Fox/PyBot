@@ -127,7 +127,8 @@
         "badge": "[b]Hungry Game[/b]: Apply one of your badges to be the default badge shown next to your name in the UI. Badges are unlocked when you unlock \"Milestone Perks\"!\n[b]Usage[/b]:\n   \"[i]!badge raid boss[/i]\" Sets your default badge to the badge given by the \"raid boss\" acheivement perk.",
         "logs": "A log of moderation actions that the bot has taken.",
         "yeeted": "Let me show you my kill count. >:3~",
-        "yeetus": "Gotta protect the kids from themselves. :>~"
+        "yeetus": "Gotta protect the kids from themselves. :>~",
+        "eicon": "Search the current database of known eicons.\n[b]Usage[/b]:\n   [i]\"!eicon kali\"[/i] Search all eicons with \"kali\" in its name.\n   [i]\"!eicon gif kali\"[/i] Search all animated (gif) eicons with \"kali\" in their name.\n   [i]\"!eicon png kali\"[/i] Search all static image (png) eicons with \"kali\" in their name."
     },
     "syntax": {
         "buy": [
@@ -215,6 +216,18 @@
         "create": [],
         "accept": [],
         "decline": [],
+        "eicon": [
+            {
+                "name": "filetype",
+                "one of": ["gif", "png"],
+                "type": "str",
+                "optional": true
+            },
+            {
+                "name": "search",
+                "type": "str"
+            }
+        ],
         "action": [
             {
                 "name": "action",

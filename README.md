@@ -1,5 +1,5 @@
 # PyBot
-A local F-Chat bot framework built with Python.
+A local F-Chat bot framework built with Python (3.10).
 
 ## Usage:
 `python pybot.py`
