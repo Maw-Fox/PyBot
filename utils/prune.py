@@ -3,7 +3,7 @@ import requests
 
 from pathlib import Path
 from hashlib import md5
-from time import time, sleep
+from time import time
 
 PARSER = argparse.ArgumentParser(
     prog='PyBot Utilities: Prune Icon DB',
@@ -30,6 +30,8 @@ ARGS = PARSER.parse_args()
 
 PATH: str = str(Path('data/eicon_db.csv').resolve())
 MAX_T: int = time() - ARGS.days * 86400
+
+print('Startin\' that prunin\'!')
 
 
 def get_exists() -> dict[str, tuple[str, str, int]]:
@@ -74,27 +76,9 @@ class Verify:
         mime: str = response.headers.get('content-type')
         mime = mime.split('/')[1]
         Verify.exists[self.check] = (self.check, mime, int(time()))
-        sleep(0.5)
-        Verify.step()
 
     def itr() -> int:
         Verify.__step += 1
-
-    @staticmethod
-    def step() -> None:
-        if not len(queue):
-            print('Pruning complete!')
-            buffer: str = ''
-            f = open(PATH, 'w', encoding='utf-8')
-            Verify.exists = dict(
-                sorted(Verify.exists.items(), key=lambda x: x[0])
-            )
-            for name in Verify.exists:
-                name, ext, last = Verify.exists[name]
-                buffer += f'{name},{ext},{last}\n'
-            f.write(buffer)
-            f.close()
-        queue.pop(0).do()
 
 
 queue: list[Verify] = []
@@ -102,4 +86,23 @@ queue: list[Verify] = []
 for name in Verify.exists:
     Verify(name)
 
-Verify.step()
+for item in queue.copy():
+    item.do()
+    queue.pop()
+
+
+def finish() -> None:
+    print('Pruning complete!')
+    buffer: str = ''
+    f = open(PATH, 'w', encoding='utf-8')
+    Verify.exists = dict(
+        sorted(Verify.exists.items(), key=lambda x: x[0])
+    )
+    for name in Verify.exists:
+        name, ext, last = Verify.exists[name]
+        buffer += f'{name},{ext},{last}\n'
+    f.write(buffer)
+    f.close()
+
+
+finish()
