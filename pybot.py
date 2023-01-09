@@ -36,7 +36,8 @@ CHECK: dict[str, int] = {
 def get_exists() -> dict[str, tuple[str, str, int]]:
     obj: dict[str, tuple[str, str, int]] = {}
     f = open('data/eicon_db.csv', 'r', encoding='utf-8')
-    for line in f.readlines():
+    lines: list[str] = f.read()[:-1].split('\n')
+    for line in lines:
         name, extension, last_verified = line.split(',')
         obj[name] = (name, extension, last_verified)
     return obj
@@ -45,11 +46,11 @@ def get_exists() -> dict[str, tuple[str, str, int]]:
 class Verify:
     queue: list = []
     next: float = time() + 1.5
-    save: float = time() + 300.0
+    save: float = time() + 3.0
     exists: dict[str, tuple[str, str, int]] = get_exists()
 
     def __init__(self, check: str):
-        self.check: str = check
+        self.check: str = check.lower()
         Verify.queue.append(self)
 
     def do(self) -> None:
@@ -73,6 +74,10 @@ class Verify:
             Verify.save = t + 300.0
             buffer: str = ''
             f = open('data/eicon_db.csv', 'w', encoding='utf-8')
+            Verify.exists = dict(
+                sorted(Verify.exists.items(), key=lambda x: x[0])
+            )
+            print(Verify.exists)
             for name in Verify.exists:
                 name, ext, last = Verify.exists[name]
                 buffer += f'{name},{ext},{last}\n'
