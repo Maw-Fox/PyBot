@@ -452,6 +452,8 @@ class Parser:
                     arg.name + '".'
                 )
                 return built_args
+            if not buffer and arg.get('optional'):
+                continue
             if arg.get('one of'):
                 expects: list = arg.get('one of')
                 first: str = exploded[0].lower()
@@ -511,8 +513,8 @@ class Command:
         ]) + '\n'
         '   [b]Hungry Game:[/b]\n      ' +
         '   '.join([
-            'hungry', 'create', 'buy', '[s]target[/s]', 'badge',
-            'challenge', 'sheet', '[s]action[/s]', 'perks',
+            'hungry', 'create', 'buy', 'target', 'badge',
+            'challenge', 'sheet', 'action', 'perks',
             'abilities', 'refund'
         ]) + '\n'
     )
@@ -544,6 +546,78 @@ class Command:
         )
 
     @staticmethod
+    async def action(
+        by: Character,
+        action: str,
+        channel: Channel,
+        **kwargs
+    ) -> None:
+        action = action.lower()
+        output_error: Output = Output(recipient=by)
+        targets: list[H.HungryCharacter | H.ThirstyCharacter] = []
+        char: H.GameCharacter = channel.hungry.get_ingame(by.name)
+        game: H.Game = channel.hungry
+        if not char:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: You\'re not in this game!'
+            )
+        ability: H.CharacterAbility = char.abilities.get(action.lower())
+        if not ability:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: Invalid ability!'
+            )
+        if not game:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: No ongoing game in this channel!'
+            )
+        if game.turn != char:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: It\'s not your turn!'
+            )
+        if action == 'attack':
+            if type(char) == H.HungryCharacter:
+                for p in game.prey:
+                    if p.deceased:
+                        continue
+                    targets.append(p)
+            else:
+                targets.append(game.pred)
+        else:
+            targets.append(char)
+        await game.use_ability(char, ability, targets)
+
+    @staticmethod
+    async def target(
+        by: Character,
+        channel: Channel,
+        character: list[str],
+        **kwargs
+    ) -> None:
+        action = action.lower()
+        output_error: Output = Output(recipient=by)
+        targets: list[H.HungryCharacter | H.ThirstyCharacter] = []
+        char: H.GameCharacter = channel.hungry.get_ingame(by.name)
+        game: H.Game = channel.hungry
+        if not char:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: You\'re not in this game!'
+            )
+        ability: H.CharacterAbility = char.abilities.get(action.lower())
+        if not ability:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: Invalid ability!'
+            )
+        if not game:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: No ongoing game in this channel!'
+            )
+        if game.turn != char:
+            return await output_error.send(
+                '[b]Hungry Game[/b]: It\'s not your turn!'
+            )
+        game.use_ability(char, ability, targets)
+
+    @staticmethod
     async def accept(
         by: Character,
         **kwargs
@@ -563,6 +637,15 @@ class Command:
             '[b]Hungry Game[/b]: You accepted the challenge.'
         )
         setup.add_consent(char)
+        if not len(setup.need_consent):
+            game: H.Game = H.Game(
+                setup.pred,
+                setup.prey,
+                setup.channel,
+                setup.output
+            )
+            setup.channel.setup = False
+            await H.UI.draw_game_start(game)
 
     @staticmethod
     async def decline(

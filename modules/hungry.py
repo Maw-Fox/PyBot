@@ -7,7 +7,6 @@ from math import floor, ceil
 from modules.utils import log
 from modules.channel import Channel
 
-
 DOC: dict[str, dict[str, complex]] = {}
 
 
@@ -20,8 +19,37 @@ def load_doc() -> None:
 
 load_doc()
 
+MODIFIER_TEMPLATE: dict[str, int | float] = {
+    'add_hp': 0,
+    'mod_hp': 1.0,
+    'add_max_hp': 0,
+    'mod_max_hp': 1.0,
+    'add_stamina': 0,
+    'mod_stamina': 1.0,
+    'add_stamina_max': 0,
+    'mod_stamina_max': 1.0,
+    'add_strength': 0,
+    'mod_strength': 1.0,
+    'add_agility': 0,
+    'mod_agility': 1.0,
+    'add_vitality': 0,
+    'mod_vitality': 1.0,
+    'add_damage': 0,
+    'mod_damage': 1.0,
+    'add_heal': 0,
+    'mod_heal': 1.0,
+    'add_damage_reduction': 0,
+    'mod_damage_reduction': 1.0,
+    'add_damage_buffer': 0,
+    'mod_damage_buffer': 1.0,
+    'add_evasion': 0,
+    'mod_evasion': 1.0,
+    'add_damage': 0,
+    'mod_damage': 1.0
+}
 
-class GameCharacter():
+
+class Character():
     def __init__(
         self,
         name: str,
@@ -30,13 +58,13 @@ class GameCharacter():
         strength: int = 4,
         agility: int = 4,
         vitality: int = 4,
-        stat_alloc: int = 11,
-        perk_alloc: int = 0,
-        ability_alloc: int = 0,
+        spent_stat: int = 11,
+        spent_perk: int = 0,
+        spent_ability: int = 0,
         wins: list[dict[str, list]] = [],
         losses: list[dict[str, list]] = [],
-        perks: dict[str, int] = {},
-        abilities: dict[str, int] = {
+        perk_levels: dict[str, int] = {},
+        ability_levels: dict[str, int] = {
             'attack': 1,
             'heal': 1,
             'rest': 1,
@@ -44,113 +72,87 @@ class GameCharacter():
         },
         badge: str = ''
     ):
-        self.display_name: str = name
+        self.proper_name: str = name
         self.name: str = name.lower()
         self.level: int = level
         self.max_level: int = max_level
         self.wins: list[dict[str, list]] = wins
         self.losses: list[dict[str, list]] = losses
-        self.in_game: bool = False
-        self.stat_alloc: int = stat_alloc
-        self.perk_alloc: int = perk_alloc
-        self.ability_alloc: int = ability_alloc
-        self.strength: int = strength
-        self.agility: int = agility
-        self.vitality: int = vitality
-        self.status_effects: dict[str, CharacterStatus] = {}
+        self.spent_stat: int = spent_perk
+        self.spent_perk: int = spent_perk
+        self.spent_ability: int = spent_ability
+        self.str: int = strength
+        self.agi: int = agility
+        self.vit: int = vitality
+        self.status: dict[str, Status] = {}
         self.hp: float = 1.0
         self.stamina: float = 1.0
-        self.modifiers = Modifier.template.copy()
-        self.ability_modifiers = Modifier.template.copy()
-        self.ability_modifiers.update(Modifier.template_ability)
+        self.modifiers: dict[str, int | float] = MODIFIER_TEMPLATE.copy()
+        self.ability_modifiers: dict[str, int | float] = self.modifiers.copy()
         self.deceased: bool = False
-        self.incapacitated: bool = False
         self.badge: str = badge
-        self.has_badges: str = ''
-        self.desires_refund: int = 0
-        self.perks: dict[str, CharacterPerk] = {}
-        self.build_perkbilities(CharacterPerk, self.perks, perks)
-        self.abilities: dict[str, CharacterAbility] = {}
-        self.build_perkbilities(
-            CharacterAbility,
-            self.abilities,
-            abilities
-        )
+        self.perk_levels: dict[str, int] = perk_levels
+        self.ability_levels: dict[str, int] = ability_levels
+        self.perks: dict[str, Perk] = {}
+        self.build_perkbilities(Perk, self.perks, perk_levels)
+        self.abilities: dict[str, Ability] = {}
+        self.build_perkbilities(Ability, self.abilities, ability_levels)
 
-    def build_perkbilities(self, cls, new_li: dict, li: dict[str, int]):
-        for name in li:
-            level: int = li[name]
-            perkbility: cls = cls(name=name, level=level, character=self)
-            new_li[name] = perkbility
+    def build_perkbilities(self, cls, ref: dict, obj: dict[str, int]):
+        for name in obj:
+            level: int = obj[name]
+            perkbility: cls = cls(name, level, self)
+            ref[name] = perkbility
 
     def remove_perk(self, perk: str) -> None:
         self.perks.pop(perk)
 
     def add_perk(self, perk: str, level: int) -> None:
-        perk_inst = CharacterPerk(
-            name=perk,
-            level=level,
-            character=self
+        perk_instance: Perk = Perk(
+            perk,
+            level,
+            self
         )
-        self.perks[perk] = perk_inst
-
-    def remove_ability(self, ability: str) -> None:
-        self.abilities.pop(ability)
-
-    def add_ability(self, ability: str, level: int) -> None:
-        ability_inst = CharacterAbility(
-            name=ability,
-            level=level,
-            character=self
-        )
-        self.abilities[ability] = ability_inst
+        self.perks[perk] = perk_instance
 
     def update_cooldowns(self) -> None:
         for name in self.abilities:
-            ability: CharacterAbility = self.abilities[name]
+            ability: Ability = self.abilities[name]
             if ability.cooldown:
                 ability.cooldown -= 1
 
     def update_statuses(self) -> None:
-        for name in self.status_effects:
-            status: CharacterStatus = self.status_effects[name]
+        for name in self.status:
+            status: Status = self.status[name]
             if status.duration == 1:
-                self.status_effects.pop(name)
+                self.status.pop(name)
 
-    def increment_level(self) -> None:
-        self.level = min(self.level + 1, Game.MAX_LEVEL)
-        new_max: int = max(self.level, self.max_level)
-        if new_max == self.max_level:
-            return
-        self.max_level = new_max
-        self.stat_alloc += 1
-        if not self.max_level % 4:
-            self.ability_alloc += 1
-        if not self.max_level % 2:
-            self.perk_alloc += 1
+    def get_unspent(self) -> tuple[int, int, int]:
+        """
+        -> tuple(stat, perk, ability)
+        """
+        return (
+            10 + self.max_level - self.spent_stat,
+            floor(self.max_level / 2) - self.spent_perk,
+            floor(self.max_level / 4) - self.spent_ability
+        )
 
 
-class CharacterStatus:
+class Status:
     def __init__(
         self,
-        character: GameCharacter,
         name: str,
-        description: str,
+        level: int,
+        character: Character,
         duration: int,
-        level: int = 1,
-        incapacitated: bool = False,
         deceased: bool = False,
-        indefinite: bool = False,
         **kwargs
     ):
         self.name: str = name
-        self.description: str = description
         self.level: int = level
         self.duration: int = duration
         self.deceased: bool = deceased
-        self.incapacitated: bool = incapacitated
-        self.indefinite: bool = indefinite
-        self.character: GameCharacter = character
+        self.character: Character = character
         self.modified: dict[str, int | float] = {}
         for arg, value in kwargs.items():
             self.modified[arg] = value
@@ -159,41 +161,6 @@ class CharacterStatus:
     def remove(self) -> None:
         for modifier, value in self.modified.items():
             self.character.modifiers[modifier] -= value
-
-
-class Modifier:
-    template: dict[str, int | float] = {
-            'add_hp': 0,
-            'mod_hp': 1.0,
-            'add_max_hp': 0,
-            'mod_max_hp': 1.0,
-            'add_stamina': 0,
-            'mod_stamina': 1.0,
-            'add_stamina_max': 0,
-            'mod_stamina_max': 1.0,
-            'add_strength': 0,
-            'mod_strength': 1.0,
-            'add_agility': 0,
-            'mod_agility': 1.0,
-            'add_vitality': 0,
-            'mod_vitality': 1.0,
-            'mod_damage': 1.0,
-            'add_heal': 0,
-            'mod_heal': 1.0,
-            'add_damage_reduction': 0,
-            'add_damage_buffer': 0,
-            'mod_damage_buffer': 1.0,
-            'add_evasion': 0,
-            'mod_evasion': 1.0,
-            'add_damage': 0,
-            'mod_damage': 1.0
-    }
-    template_ability: dict[str, int | float] = {
-        'attacking': 0,
-        'healing': 0,
-        'resting': 0,
-        'defending': 0
-    }
 
 
 class Passive:
@@ -249,35 +216,7 @@ class Passive:
         ref['mod_vitality'] = level * -0.1
 
 
-class CharacterPerk:
-    # Perk database, stores data including method pointer.
-    perkiary: dict[str, dict] = DOC['passives']
-
-    def __init__(
-        self,
-        name: str,
-        level: int,
-        character: GameCharacter
-    ) -> None:
-        self.name: str = name
-        self.level: int = level
-        self.character: GameCharacter = character
-        self.modified: dict[str, int | float] = {}
-        self.fn = getattr(Passive, CharacterPerk.perkiary[name]['setup'])
-        self.fn(self.level, self.modified)
-        for modifier, value in self.modified.items():
-            self.character.modifiers[modifier] += value
-        self.badge: str = CharacterPerk.perkiary[name].get('badge', '')
-        if not character.badge:
-            character.badge = self.badge
-        character.has_badges += self.badge
-
-    def remove(self) -> None:
-        for modifier, value in self.modified.items():
-            self.character.modifiers[modifier] -= value
-
-
-class Ability:
+class Active:
     @staticmethod
     def attack(level: int, ref: dict[str, int | float]) -> None:
         ref['attacking'] = 1
@@ -302,21 +241,47 @@ class Ability:
         ref['add_damage_buffer'] = level * 2 + 4
 
 
-class CharacterAbility:
+class Perk:
+    perkiary: dict[str, dict] = DOC['passives']
+
+    def __init__(
+        self,
+        name: str,
+        level: int,
+        character: Character
+    ) -> None:
+        self.name: str = name
+        self.level: int = level
+        self.character: Character = character
+        self.modified: dict[str, int | float] = {}
+        self.fn = getattr(Passive, Perk.perkiary[name]['setup'])
+        self.fn(self.level, self.modified)
+        for modifier, value in self.modified.items():
+            self.character.modifiers[modifier] += value
+        self.badge: str = Perk.perkiary[name].get('badge', '')
+        if not character.badge:
+            character.badge = self.badge
+
+    def remove(self) -> None:
+        for modifier, value in self.modified.items():
+            self.character.modifiers[modifier] -= value
+
+
+class Ability:
     abiliary: dict[str, dict] = DOC['abilities']
 
     def __init__(
         self,
         name: str,
         level: int,
-        character: GameCharacter,
+        character: Character,
         cooldown: int = 0
     ) -> None:
         self.name: str = name
         self.level: int = level
-        self.character: GameCharacter = character
+        self.character: Character = character
         self.cooldown: int = cooldown
-        self.fn = getattr(Ability, CharacterAbility.abiliary[name]['setup'])
+        self.fn = getattr(Active, Ability.abiliary[name]['setup'])
         self.modified: dict[str, int | float] = {}
 
     def remove(self) -> None:
@@ -333,81 +298,120 @@ class CharacterAbility:
             self.character.ability_modifiers[modifier] += value
 
 
-class HungryCharacter(GameCharacter):
+class Pred(Character):
+    MOD: float = 1.0
+
     def __init__(
         self,
         name: str,
         level: int = 1,
+        max_level: int = 1,
         strength: int = 4,
         agility: int = 4,
         vitality: int = 4,
-        stat_alloc: int = 11,
-        perk_alloc: int = 0,
-        ability_alloc: int = 0,
+        spent_stat: int = 0,
+        spent_perk: int = 0,
+        spent_ability: int = 0,
         wins: list[dict[str, list]] = [],
         losses: list[dict[str, list]] = [],
-        perks: dict[str, int] = {},
-        abilities: dict[str, int] = {},
+        perk_levels: dict[str, int] = {},
+        ability_levels: dict[str, int] = {
+            'attack': 1,
+            'heal': 1,
+            'defend': 1,
+            'rest': 1
+        },
         badge: str = ''
     ):
         super().__init__(
-            name=name,
-            level=level,
-            strength=strength,
-            agility=agility,
-            vitality=vitality,
-            stat_alloc=stat_alloc,
-            perk_alloc=perk_alloc,
-            ability_alloc=ability_alloc,
-            wins=wins,
-            losses=losses,
-            perks=perks,
-            abilities=abilities,
-            badge=badge
+            name,
+            level,
+            max_level,
+            strength,
+            agility,
+            vitality,
+            spent_stat,
+            spent_perk,
+            spent_ability,
+            wins,
+            losses,
+            perk_levels,
+            ability_levels,
+            badge
         )
-        self.status_effects['Pred'] = CharacterStatus(
-            self,
-            'Pred',
-            'You are pred and are at optimal strength!',
-            99,
-            indefinite=True
+        self.__str: int = self.str
+        self.__agi: int = self.agi
+        self.__vit: int = self.vit
+        self.str: int = 0
+        self.agi: int = 0
+        self.vit: int = 0
+        self.db: int = 0
+        self.dr: int = 0
+        self.crit: int = 0
+        self.die: int = 0
+        self.faces: int = 0
+        self.heal: int = 0
+        self.heal_mod: int = 0
+        self.mod: int = 0
+        self.evade: int = 0
+        self.hp_max: int = 0
+        self.recalculate()
+
+    def recalculate(self) -> None:
+        self.str = floor(
+            (self.modifiers.get('add_strength', 0) + self.__str) *
+            self.modifiers.get('mod_strength', 1.0) * self.MOD
         )
-        self.current_damage_buffer: int = 0
+        self.agi = floor(
+            (self.modifiers.get('add_agility', 0) + self.__agi) *
+            self.modifiers.get('mod_agility', 1.0) * self.MOD
+        )
+        self.vit = floor(
+            (self.modifiers.get('add_vitality', 0) + self.__vit) *
+            self.modifiers.get('mod_vitality', 1.0) * self.MOD
+        )
+        self.hp_max = floor(
+            self.modifiers.get('add_hp_max', 0) + 100 +
+            floor(self.vit / 5) * 15 * self.modifiers.get('mod_hp_max', 1.0)
+        )
+        self.stamina_max = floor(
+            self.modifiers.get('add_stamina_max', 0) + 100 +
+            floor(self.vit / 5) * 15
+        )
+        self.crit = (10 + floor(self.agi / 5) * 12.5) % 100
+        self.die = (
+            1 + floor((30 + floor(self.agi / 5) * 12.5) / 100) +
+            floor(self.agi / 15)
+        )
+        self.faces = 8 + floor(self.str / 4) * 2
+        self.mod = floor(self.str / 10) * 3
+        self.evade = floor(
+            (
+                self.modifiers.get('add_evasion', 0) +
+                floor(self.agi / 10) * 6
+            ) * self.modifiers.get('mod_evasion', 1.0)
+        )
+        self.dr = floor(
+            (
+                self.modifiers.get('add_damage_reduction', 0) +
+                floor(self.vit / 10) * 2
+            ) * self.modifiers.get('mod_damage_reduction', 1.0)
+        )
+        self.db = floor(
+            (
+                self.modifiers.get('add_damage_buffer', 0) +
+                floor(self.vit / 5) * 3
+            ) * self.modifiers.get('mod_damage_buffer', 1.0)
+        )
+        self.heal_mod = self.modifiers.get('add_heal', 0)
+        self.heal = ceil(
+            (12 + self.heal_mod) *
+            self.modifiers.get('mod_heal', 1.0)
+        )
 
 
-class ThirstyCharacter(GameCharacter):
-    def __init__(
-        self,
-        name: str,
-        level: int = 1,
-        strength: int = 4,
-        agility: int = 4,
-        vitality: int = 4,
-        stat_alloc: int = 0,
-        perk_alloc: int = 0,
-        ability_alloc: int = 0,
-        wins: list[dict[str, list]] = [],
-        losses: list[dict[str, list]] = [],
-        perks: dict[str, int] = {},
-        abilities: dict[str, int] = {},
-        badge: str = ''
-    ):
-        super().__init__(
-            name=name,
-            level=level,
-            strength=strength,
-            agility=agility,
-            vitality=vitality,
-            stat_alloc=stat_alloc,
-            perk_alloc=perk_alloc,
-            ability_alloc=ability_alloc,
-            wins=wins,
-            losses=losses,
-            perks=perks,
-            abilities=abilities,
-            badge=badge
-        )
-        self.current_damage_buffer: int = 0
+class Prey(Pred):
+    MOD: float = 0.6
 
 
 class Setup:
@@ -415,36 +419,28 @@ class Setup:
 
     def __init__(
         self,
-        pred: GameCharacter,
-        prey: list[GameCharacter],
+        pred: Character,
+        prey: list[Character],
         channel: Channel,
         output
     ):
-        self.pred: GameCharacter = pred
-        self.prey: list[GameCharacter] = prey
-        self.need_consent: list[GameCharacter] = prey
+        self.pred: Character = pred
+        self.prey: list[Character] = prey.copy()
+        self.need_consent: list[Character] = prey.copy()
         self.channel: Channel = channel
         self.output = output
         channel.setup = True
         self.timeout: int = int(time()) + 300
-        SETUPS[self] = Channel
+        SETUPS[self] = channel
 
-    def add_consent(self, character: GameCharacter) -> None:
+    def add_consent(self, character: Character) -> None:
         self.need_consent.pop(self.need_consent.index(character))
-        if not len(self.need_consent):
-            self.channel.hungry = Game(
-                self.pred,
-                self.prey,
-                self.channel,
-                self.output
-            )
-            self.channel.setup = False
 
     def no_consent(self) -> None:
         SETUPS.pop(self)
 
     @staticmethod
-    def get_instance_by_prey(character: GameCharacter):
+    def get_instance_by_prey(character: Character):
         for setup in SETUPS:
             if character in setup.prey:
                 return setup
@@ -474,335 +470,173 @@ class Game:
     MAX_LEVEL: int = 60
     snapshot_last: int = 0
     SNAPSHOT_DELAY: int = 600
-    characters: dict[str, GameCharacter] = {}
+    characters: dict[str, Character] = {}
     ACITIVITY_DELAY: int = 10800
 
     def __init__(
         self,
-        pred: GameCharacter,
-        prey: list[GameCharacter],
+        pred: Character,
+        prey: list[Character],
         channel: Channel,
         output
     ):
         self.activity: int = int(time())
-        self.pred: HungryCharacter = HungryCharacter(
-            name=pred.name,
-            level=pred.level,
-            strength=pred.strength,
-            agility=pred.agility,
-            vitality=pred.vitality,
-            stat_alloc=pred.stat_alloc,
-            perk_alloc=pred.perk_alloc,
-            ability_alloc=pred.ability_alloc,
-            wins=pred.wins,
-            losses=pred.losses,
-            perks=self.get_perkability_level_dict(pred.perks),
-            abilities=self.get_perkability_level_dict(pred.abilities),
-            badge=pred.badge
+        self.pred: Pred = Pred(
+            pred.proper_name,
+            pred.level,
+            pred.max_level,
+            pred.str,
+            pred.agi,
+            pred.vit,
+            pred.spent_stat,
+            pred.spent_perk,
+            pred.spent_ability,
+            pred.wins,
+            pred.losses,
+            pred.perk_levels,
+            pred.ability_levels,
+            pred.badge
         )
-        self.prey: list[ThirstyCharacter] = []
-        for p in prey:
-            self.prey.append(
-                ThirstyCharacter(
-                    name=p.name,
-                    level=p.level,
-                    strength=p.strength,
-                    agility=p.agility,
-                    vitality=p.vitality,
-                    stat_alloc=p.stat_alloc,
-                    perk_alloc=p.perk_alloc,
-                    ability_alloc=p.ability_alloc,
-                    losses=p.losses,
-                    wins=p.wins,
-                    perks=self.get_perkability_level_dict(p.perks),
-                    abilities=self.get_perkability_level_dict(p.abilities),
-                    badge=p.badge
-                )
-            )
-        self.pred.current_damage_buffer = Game.get_modded_damage_buffer(
-            self.pred,
-            Game.get_modded_vitality(self.pred)
-        )
-        self.who: dict[str, HungryCharacter | ThirstyCharacter] = {}
+        self.prey: list[Prey] = [
+            Prey(
+                p.proper_name,
+                p.level,
+                p.max_level,
+                p.str,
+                p.agi,
+                p.vit,
+                p.spent_stat,
+                p.spent_perk,
+                p.spent_ability,
+                p.wins,
+                p.losses,
+                p.perk_levels,
+                p.ability_levels,
+                p.badge
+            ) for p in prey
+        ]
+        self.who: dict[str, Pred | Prey] = {}
         self.who[self.pred.name] = self.pred
         for p in self.prey:
-            p.current_damage_buffer = Game.get_modded_damage_buffer(
-                p,
-                Game.get_modded_vitality(p)
-            )
             self.who[p.name] = p
         self.channel: Channel = channel
         channel.hungry = self
         self.output = output
         self.active: bool = True
-        self.dead: list[ThirstyCharacter] = []
-        # Setting last active time.
+        self.dead: list[Prey] = []
         GAMES[self] = int(time())
-        self.initiative: list[GameCharacter] = []
+        self.initiative: list[Pred | Prey] = []
         self.reset_initiative()
-        self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
-        UI.draw_game(self)
+        self.turn: Pred | Prey = self.initiative[0]
 
     @staticmethod
     def get_perkability_level_dict(
-        perks: dict[str, CharacterPerk | CharacterAbility]
+        perks: dict[str, Perk | Ability]
     ) -> dict[str, int]:
         obj: dict[str, int] = {}
         for perk_name, perk in perks.items():
             obj[perk_name] = perk.level
         return obj
 
-    @staticmethod
-    def get_modded_hp(character: GameCharacter) -> tuple[int, int]:
-        vitality: int = Game.get_modded_vitality(character)
-        add_hp_max: int = character.modifiers.get('add_hp_max', 0)
-        mod_hp_max: float = character.modifiers.get('mod_hp_max', 1.0)
-        max_hp: int = floor(
-            (
-                add_hp_max + 100 + floor(vitality / 5) * 15
-            ) * mod_hp_max
-        )
-        return (
-            floor(max_hp * character.hp),
-            max_hp
-        )
-
-    @staticmethod
-    def get_modded_stamina(character: GameCharacter) -> tuple[int, int]:
-        vitality: int = Game.get_modded_vitality(character)
-        max_stamina: int = floor(
-            (
-                character.modifiers.get('add_stamina_max', 0) + 100 +
-                floor(vitality / 5) * 5
-            ) * character.modifiers.get('mod_stamina_max', 1.0)
-        )
-        return (
-            floor(max_stamina * character.stamina),
-            max_stamina
-        )
-
-    @staticmethod
-    def get_modded_strength(character: GameCharacter) -> int:
-        return floor(
-            (
-                character.strength + character.modifiers.get('add_strength', 0)
-            ) * character.modifiers.get('mod_strength', 1.0)
-        )
-
-    @staticmethod
-    def get_modded_agility(character: GameCharacter) -> int:
-        return floor(
-            (
-               character.agility + character.modifiers.get('add_agility', 0)
-            ) * character.modifiers.get('mod_agility', 1.0)
-        )
-
-    @staticmethod
-    def get_modded_vitality(character: GameCharacter) -> int:
-        return floor(
-            (
-               character.vitality + character.modifiers.get('add_vitality', 0)
-            ) * character.modifiers.get('mod_vitality', 1.0)
-        )
-
-    @staticmethod
-    def get_modded_stats(character: GameCharacter) -> tuple[int, int, int]:
-        return (
-            Game.get_modded_strength(character),
-            Game.get_modded_agility(character),
-            Game.get_modded_vitality(character)
-        )
-
-    @staticmethod
-    def get_crit(
-        agility: int
-    ) -> int:
-        return (
-            10 + floor(
-                floor(agility / 5) * 12.5
-            ) % 100
-        )
-
-    @staticmethod
-    def get_die(
-        agility: int
-    ) -> int:
-        return (
-            1 + floor(
-                (
-                    30 + floor(agility / 5) * 12.5
-                ) / 100
-            ) + floor(agility / 15)
-        )
-
-    def get_faces(
-        strength: int
-    ) -> int:
-        return 8 + floor(strength / 4) * 2
-
-    @staticmethod
-    def get_mod(
-        strength: int
-    ) -> int:
-        return floor(strength / 10) * 3
-
-    @staticmethod
-    def __get_evasion(
-        agility: int
-    ) -> int:
-        return floor(agility / 10) * 6
-
-    @staticmethod
-    def get_modded_evasion(
-        character: GameCharacter,
-        agility: int
-    ) -> int:
-        return (
-            floor(
-                character.modifiers.get('add_evasion', 0) + (
-                    Game.__get_evasion(agility)
-                ) * character.modifiers.get('mod_evasion', 1.0)
-            )
-        )
-
-    @staticmethod
-    def __get_damage_reduction(
-        vitality: int
-    ) -> int:
-        return floor(vitality / 10) * 2
-
-    @staticmethod
-    def get_modded_damage_reduction(
-        character: GameCharacter,
-        vitality: int
-    ) -> int:
-        return (
-            floor(
-                character.modifiers.get('add_damage_reduction', 0) + (
-                    Game.__get_damage_reduction(vitality)
-                ) * character.modifiers.get('mod_damage_reduction', 1.0)
-            )
-        )
-
-    def __get_damage_buffer(
-        vitality: int
-    ) -> int:
-        return floor(vitality / 5) * 3
-
-    @staticmethod
-    def get_modded_damage_buffer(
-        character: GameCharacter,
-        vitality: int
-    ) -> int:
-        return (
-            floor(
-                character.modifiers.get('add_damage_buffer') + (
-                    Game.__get_damage_buffer(vitality)
-                ) * character.modifiers.get('mod_damage_buffer')
-            )
-        )
-
-    @staticmethod
-    def get_modded_heal(
-        character: GameCharacter
-    ) -> tuple[int, int]:
-        return (
-            ceil(
-                12 * character.modifiers.get('mod_heal')
-            ),
-            character.modifiers.get('add_heal')
-        )
-
-    # Damage stats template:
-    # die, faces, mod, crit
-    @staticmethod
-    def get_damage_stats(
-        strength: int,
-        agility: int
-    ) -> tuple[int, int, int, int]:
-        return (
-            Game.get_die(agility),
-            Game.get_faces(strength),
-            Game.get_mod(strength),
-            Game.get_crit(agility)
-        )
-
     async def use_ability(
         self,
-        char: HungryCharacter | ThirstyCharacter,
-        ability: CharacterAbility,
-        targets: list[HungryCharacter | ThirstyCharacter] | None = None
+        char: Pred | Prey,
+        ability: Ability,
+        targets: list[Pred | Prey] | None = None
     ) -> None:
         event_parameters: dict[str, str | list | bool] = {
             'type': ability.name,
-            'targets': [],
-            'deltas': [],
-            'pre_deltas': [],
-            'rolls': [],
-            'evaded': [],
-            'roll': '',
-            'game_over': False
+            'deltas_hp': [],
+            'deltas_st': [],
+            'results': []
         }
 
+        event_parameters['targets'] = targets
         if ability.name == 'attack':
-            s: int = Game.get_modded_strength(char)
-            a: int = Game.get_modded_agility(char)
-            d, f, m, c = Game.get_damage_stats(s, a)
             for target in targets:
-                t_v = Game.get_modded_vitality(target)
-                t_a = Game.get_modded_agility(target)
-                t_hp, t_hp_m = Game.get_modded_hp(target)
-                t_dr = Game.get_modded_damage_reduction(target, t_v)
-                t_ev = Game.get_modded_evasion(target, t_a)
                 damage: int = 0
-                if ceil(random() * 100) < c:
+                d: int = char.die
+                if ceil(random() * 100) < char.crit:
                     d += 1
-                event_parameters['roll'] += f'{d}d{f} + {m}'
                 for idx in range(d):
-                    result: int = ceil(random() * f)
+                    result: int = ceil(random() * char.faces)
                     damage += result
-                    event_parameters['rolls'].append(result)
-                damage += m
-                if target.current_damage_buffer:
-                    diff: int = damage - target.current_damage_buffer
-                    target.current_damage_buffer = -diff if diff < 0 else 0
+                damage += char.mod
+                o_s: str = (
+                    f'{UI.get_formatted_name(char)}\'s attack roll ' +
+                    f'on {UI.get_formatted_name(target)}: ' +
+                    f'{d}d{char.faces} + {char.mod} - '
+                )
+                damage = max(damage - target.dr, 0)
+                if target.evade and ceil(random() * 100) < target.evade:
+                    damage = 0
+                    o_s = f'[i]EVADED![/i] {o_s}'
+                if target.db:
+                    diff: int = damage - target.db
+                    o_s += (
+                        str(
+                            target.db
+                        ) + f' - {target.dr}'
+                    )
+                    target.db = -diff if diff < 0 else 0
                     damage = max(diff, 0)
-                damage = max(damage - t_dr, 0)
-                event_parameters['pre_deltas'].append(t_hp)
-                event_parameters['deltas'].append(
+                else:
+                    o_s += f'0 - {target.dr}'
+                event_parameters['deltas_hp'].append(
                     damage
                 )
-                if t_ev and ceil(random() * 100) < t_ev:
-                    event_parameters['evaded'].append(True)
-                else:
-                    event_parameters['evaded'].append(False)
-
-                target.hp = float(max((t_hp - damage) / t_hp_m, 0.0))
+                event_parameters['deltas_st'].append(0)
+                event_parameters['results'].append(
+                    o_s + f' =  {damage}'
+                )
+                target.hp = float(
+                    max(
+                        (
+                            ceil(target.hp * target.hp_max) - damage
+                        ) / target.hp_max, 0.0
+                    )
+                )
                 if target.hp <= 0.0:
                     self.died(target)
         elif ability.name == 'heal':
-            target: HungryCharacter | ThirstyCharacter = targets[0]
-            t_hp, t_hp_m = self.get_modded_hp(target)
-            hf, hm = self.get_modded_heal(char)
-            h_result: int = ceil(hf * random())
-            event_parameters['pre_deltas'].append(t_hp)
-            event_parameters['rolls'].append(h_result)
-            h_result += hm
-            event_parameters['deltas'].append(h_result)
-            event_parameters['roll'] += f'1d{hf} + {hm}'
-            target.hp = float(min(h_result + t_hp, t_hp_m) / t_hp_m)
+            target: Pred | Prey = targets[0]
+            o_s: str = (
+                f'\n{UI.get_formatted_name(char)}\'s heal roll ' +
+                f'on {UI.get_formatted_name(target)}: 1d{char.heal} +' +
+                f' {char.heal_mod} = '
+            )
+            h_result: int = ceil(char.heal * random())
+            h_result += char.heal_mod
+            o_s += f'{h_result}'
+            event_parameters['results'].append(o_s)
+            event_parameters['deltas_hp'].append(-h_result)
+            event_parameters['deltas_st'].append(0)
+            event_parameters['roll'] += f'1d{char.heal} + {char.heal_mod}'
+            event_parameters['result'] = h_result
+            target.hp = float(
+                min(
+                    h_result + ceil(
+                        target.hp * target.hp_max), target.hp_max
+                    ) / target.hp_max
+            )
         elif ability.name == 'defend':
             a_dr: int = ability.modified['add_damage_reduction']
             a_db: int = ability.modified['add_damage_buffer']
             st_delta: int = ability.modified['add_stamina']
-            st, st_m = Game.get_modded_stamina(char)
-            event_parameters['pre_deltas'].append(st)
-            event_parameters['deltas'].append(st_delta)
-            char.current_damage_buffer += a_db
+            event_parameters['deltas_st'].append(-st_delta)
+            event_parameters['deltas_hp'].append(0)
+            char.db += a_db
             char.stamina = float(
-                max(st + st_delta) / st_m
+                max(
+                    ceil(char.stamina * char.stamina_max) + st_delta
+                ) / char.stamina_max
             )
-            CharacterStatus(
+            event_parameters['results'].append(
+                f'{UI.get_formatted_name(char)} defends! ' +
+                f'+{st_delta} stamina, +{a_dr} DR, +{a_db} DB (' +
+                f'{char.db})!'
+            )
+            Status(
                 char,
                 'Defend',
                 'Defending and regenerating stamina',
@@ -814,11 +648,16 @@ class Game:
             )
         else:
             st_delta: int = ability.modified['add_stamina']
-            st, st_m = Game.get_modded_stamina(char)
-            event_parameters['pre_deltas'].append(st)
-            event_parameters['deltas'].append(st_delta)
+            event_parameters['deltas_st'].append(-st_delta)
+            event_parameters['deltas_hp'].append(0)
             char.stamina = float(
-                max(st + st_delta) / st_m
+                max(
+                    ceil(char.stamina * char.stamina_max) + st_delta
+                ) / char.stamina_max
+            )
+            event_parameters['results'].append(
+                f'{UI.get_formatted_name(char)} rests! ' +
+                f'+{st_delta} stamina!'
             )
         if not self.active:
             event_parameters['game_over'] = True
@@ -833,23 +672,17 @@ class Game:
             self.initiative.pop(0)
         self.turn = self.initiative[0]
         Game.update_cooldowns(self.turn)
-        self.turn.current_damage_buffer = self.get_modded_damage_buffer(
-            self.turn,
-            self.get_modded_vitality(
-                self.turn
-            )
-        )
         await self.output.send(
             f'[b]Hungry Game[/b]: ' +
             self.turn.badge +
             '[user]' +
-            self.turn.display_name +
+            self.turn.proper_name +
             '[/user]\'s turn!'
         )
 
-    def died(self, character: HungryCharacter | ThirstyCharacter) -> None:
+    def died(self, character: Pred | Prey) -> None:
         character.deceased = True
-        if type(character) == HungryCharacter:
+        if type(character) == Pred:
             return self.game_over(False)
         else:
             self.dead.append(character)
@@ -861,38 +694,45 @@ class Game:
         except ValueError:
             return
 
+    @staticmethod
+    def set_level(char: Character, n: int) -> None:
+        char.level = max(
+            min(char.level + n, Game.MAX_LEVEL),
+            1
+        )
+        char.max_level = max(char.level, char.max_level)
+
     async def game_over(self, pred_win: bool) -> None:
         self.active = False
-        char: GameCharacter = Game.get_character(self.pred.name)
+        char: Character = Game.get_character(self.pred.name)
         if pred_win:
             if len(self.prey) > 1:
-                char.increment_level()
-                char.increment_level()
+                Game.set_level(self.pred, 2)
             else:
-                char.increment_level()
+                Game.set_level(self.pred, 1)
             for prey in self.prey:
-                char: GameCharacter = Game.get_character(prey.name)
+                char: Character = Game.get_character(prey.name)
                 if len(self.prey) > 1:
-                    char.level = max(char.level - 2, 1)
+                    Game.set_level(char, -2)
                     continue
-                char.level = max(char.level - 1, 1)
+                Game.set_level(char, -1)
         else:
             if len(self.prey) > 1:
-                char.level = max(char.level - 1, 1)
+                Game.set_level(char, -1)
             else:
-                char.level = max(char.level - 2, 1)
+                Game.set_level(char, -2)
             for prey in self.prey:
-                char: GameCharacter = Game.get_character(prey.name)
+                char: Character = Game.get_character(prey.name)
                 if len(self.prey) > 1:
-                    char.increment_level()
+                    Game.set_level(char, 1)
                     continue
-                char.increment_level()
-                char.increment_level()
+                Game.set_level(char, 2)
 
     @staticmethod
-    def update_cooldowns(character: GameCharacter) -> None:
+    def update_cooldowns(character: Pred | Prey) -> None:
         character.update_cooldowns()
         character.update_statuses()
+        character.recalculate()
 
     def reset_initiative(self) -> None:
         self.initiative = self.prey.copy()
@@ -903,32 +743,32 @@ class Game:
                 self.initiative.pop(select)
                 continue
             select += 1
-        self.initiative: list[ThirstyCharacter | HungryCharacter] = sorted(
-            self.initiative, key=lambda char: char.agility
+        self.initiative: list[Pred | Prey] = sorted(
+            self.initiative,
+            key=lambda char: char.agi,
+            reverse=True
         )
-        self.turn: ThirstyCharacter | HungryCharacter = self.initiative[0]
+        self.turn: Pred | Prey = self.initiative[0]
 
     @staticmethod
     def game_characters(
-        _T: None | GameCharacter | str = None
-    ) -> dict[str, GameCharacter] | list[GameCharacter] | list[str]:
+        _T: None | Character | str = None
+    ) -> dict[str, Character] | list[Character] | list[str]:
         if not _T:
             return Game.characters
-        elif type(_T) == GameCharacter:
+        elif type(_T) == Character:
             return list(Game.characters.values())
         else:
             return list(Game.characters.keys())
 
     @staticmethod
-    def add_character(name: str, char: GameCharacter) -> None:
+    def add_character(name: str, char: Character) -> None:
         Game.characters[name] = char
 
     def get_ingame(
         self, c: str | list[str]
-    ) -> HungryCharacter | ThirstyCharacter | list[
-        HungryCharacter | ThirstyCharacter
-    ] | None:
-        li: list[HungryCharacter | ThirstyCharacter] = []
+    ) -> Pred | Prey | list[Pred | Prey] | None:
+        li: list[Pred | Prey] = []
         if type(c) == str:
             return self.who.get(c.lower(), None)
         for char_string in c.copy():
@@ -941,12 +781,12 @@ class Game:
     @staticmethod
     def get_character(
         c: str | list[str]
-    ) -> GameCharacter | list[GameCharacter] | None:
-        li: list[GameCharacter] = []
+    ) -> Character | list[Character] | None:
+        li: list[Character] = []
         if type(c) == str:
             return Game.characters.get(c.lower(), None)
         for char_string in c.copy():
-            char: GameCharacter | None = Game.characters.get(
+            char: Character | None = Game.characters.get(
                 char_string.lower()
             )
             li.append(char)
@@ -965,20 +805,20 @@ class Game:
         for name in Game.characters:
             perk: dict[str, int] = {}
             ability: dict[str, int] = {}
-            char: GameCharacter = Game.characters[name]
+            char: Character = Game.characters[name]
             for name in char.perks:
                 perk[name] = char.perks[name].level
             for name in char.abilities:
                 ability[name] = char.abilities[name].level
-            save_state[char.display_name] = {
+            save_state[char.proper_name] = {
                 'lv': char.level,
                 'mlv': char.max_level,
-                's': char.strength,
-                'a': char.agility,
-                'v': char.vitality,
-                'st': char.stat_alloc,
-                'pp': char.perk_alloc,
-                'ap': char.ability_alloc,
+                's': char.str,
+                'a': char.agi,
+                'v': char.vit,
+                'st': char.spent_stat,
+                'pp': char.spent_perk,
+                'ap': char.spent_ability,
                 'w': char.wins,
                 'l': char.losses,
                 'p': perk,
@@ -997,8 +837,102 @@ class UI:
     HP_WIDTH: int = 35
 
     @staticmethod
-    def draw_game() -> None:
-        pass
+    def get_formatted_name(char: Pred | Prey) -> str:
+        return f'[user]{char.proper_name.capitalize()}[/user]' + char.badge
+
+    @staticmethod
+    def get_formatted_name_full(char: Pred | Prey) -> str:
+        return (
+            f'[color=white][b][{char.level}][/b][/color]' +
+            UI.get_formatted_name(char)
+        )
+
+    @staticmethod
+    def get_formatted_bars(
+        hp: float,
+        stam: float,
+        d_hp: int = 0,
+        d_stam: int = 0
+    ) -> str:
+        o_s: str = '\n'
+        o_s += UI.get_bar_str(hp)
+        if d_hp:
+            col: str = '[color=red]'
+            if d_hp > 0:
+                col = '[color=green]'
+            o_s += f'{col}[sup]{d_hp}[/sup][/color]'
+        o_s += f'\n{UI.get_bar_str(stam)}'
+        if d_stam:
+            col: str = '[color=red]'
+            if d_stam > 0:
+                col = '[color=green]'
+            o_s += f'{col}[sup]{d_stam}[/sup][/color]'
+        return o_s
+
+    @staticmethod
+    async def draw_game_start(
+        game: Game
+    ) -> None:
+        print(game.prey)
+        o_s: str = '[b]Hungry Game[/b]:\n[b]Predator[/b]:\n'
+        o_s += UI.get_formatted_name_full(game.pred)
+        o_s += UI.get_formatted_bars(
+            game.pred.hp,
+            game.pred.stamina
+        )
+        o_s += '\n[b]Prey[/b]:'
+        for c in game.prey:
+            o_s += f'\n{UI.get_formatted_name_full(c)}'
+            o_s += UI.get_formatted_bars(c.hp, c.stamina)
+        o_s += (
+            '\n[b]GAME START![b] ' +
+            f'First turn:{game.turn.proper_name.capitalize()}'
+        )
+        await game.output.send(
+            o_s
+        )
+
+    @staticmethod
+    async def draw_game(
+        game: Game,
+        event: dict[str, list | str | int]
+    ) -> None:
+        o_s: str = '[b]Hungry Game[/b]:\n[b]Predator[/b]:\n'
+        o_s += UI.get_formatted_name_full(game.pred)
+        if game.pred in event['targets']:
+            idx: int = event['targets'].index(game.pred)
+            o_s += UI.get_formatted_bars(
+                game.pred.hp,
+                game.pred.stamina,
+                event['deltas_hp'][idx],
+                event['deltas_st'][idx]
+            )
+        else:
+            o_s += UI.get_formatted_bars(
+                game.pred.hp,
+                game.pred.stamina
+            )
+        o_s += '\n[b]Prey[/b]:'
+        for c in game.prey:
+            o_s += f'\n{UI.get_formatted_name_full(c)}'
+            if c in event['targets']:
+                idx: int = event['targets'].index(c)
+                o_s += UI.get_formatted_bars(
+                    c.hp,
+                    c.stamina,
+                    event['deltas_hp'][idx],
+                    event['deltas_st'][idx]
+                )
+            else:
+                o_s += UI.get_formatted_bars(
+                    c.hp,
+                    c.stamina
+                )
+        for result in event['results']:
+            o_s += '\n' + result
+        await game.output.send(
+            o_s
+        )
 
     @staticmethod
     def get_bar_str(hp: float) -> None:
@@ -1019,21 +953,60 @@ class UI:
 
     @staticmethod
     def sheet(
-        character: GameCharacter
+        character: Character
     ) -> str:
         o_s: str = '\n'
-        c_n: str = character.display_name
+        c_n: str = character.proper_name
         c_l: int = character.level
-        s, a, v = Game.get_modded_stats(character)
         b: str = character.badge
-        bs: str = '   '.join([x for x in character.has_badges])
-        c_hp, m_hp = Game.get_modded_hp(character)
-        c_st, m_st = Game.get_modded_stamina(character)
-        d, f, m, c = Game.get_damage_stats(s, a)
-        e: int = Game.get_modded_evasion(character, a)
-        dr: int = Game.get_modded_damage_reduction(character, v)
-        db: int = Game.get_modded_damage_buffer(character, v)
-
+        s: int = floor(
+            (character.modifiers.get('add_strength', 0) + character.str) *
+            character.modifiers.get('mod_strength', 1.0)
+        )
+        a: int = floor(
+            (character.modifiers.get('add_agility', 0) + character.agi) *
+            character.modifiers.get('mod_agility', 1.0)
+        )
+        v: int = floor(
+            (character.modifiers.get('add_vitality', 0) + character.vit) *
+            character.modifiers.get('mod_vitality', 1.0)
+        )
+        m_hp: int = floor(
+            character.modifiers.get('add_hp_max', 0) + 100 +
+            floor(v / 5) * 15 *
+            character.modifiers.get('mod_hp_max', 1.0)
+        )
+        m_st: int = floor(
+            character.modifiers.get('add_stamina_max', 0) + 100 +
+            floor(v / 5) * 15
+        )
+        c: int = (10 + floor(a / 5) * 12.5) % 100
+        d: int = (
+            1 + floor((30 + floor(a / 5) * 12.5) / 100) +
+            floor(a / 15)
+        )
+        f: int = 8 + floor(s / 4) * 2
+        m: int = floor(s / 10) * 3
+        e: int = floor(
+            (
+                character.modifiers.get('add_evasion', 0) +
+                floor(a / 10) * 6
+            ) * character.modifiers.get('mod_evasion', 1.0)
+        )
+        dr: int = floor(
+            (
+                character.modifiers.get('add_damage_reduction', 0) +
+                floor(v / 10) * 2
+            ) * character.modifiers.get('mod_damage_reduction', 1.0)
+        )
+        db: int = floor(
+            (
+                character.modifiers.get('add_damage_buffer', 0) +
+                floor(v / 5) * 3
+            ) * character.modifiers.get('mod_damage_buffer', 1.0)
+        )
+        c_hp: int = floor(m_hp * character.hp)
+        c_st: int = floor(m_st * character.stamina)
         o_s += (
             f'{b}[user]{c_n}[/user] [color=white][b][{c_l}][/b][/color]\n' +
             f'[color=red][b][{c_hp}/{m_hp}][/b][/color] ' +
@@ -1045,7 +1018,6 @@ class UI:
             f' DB:{db}]'
         )
         if b:
-            o_s += f'\n{bs}'
             o_s += '\n[b]ACHEIVEMENTS:[/b]'
             for name, perk in character.perks.items():
                 if not perk.perkiary[name].get('cost'):
@@ -1075,28 +1047,16 @@ class UI:
                 f'\n       [b]{name.upper()}[/b]: {ability.level}/' +
                 f'{max_level}'
             )
-        if (
-            character.ability_alloc or
-            character.perk_alloc or
-            character.stat_alloc
-        ):
+        sp, pp, ap = character.get_unspent()
+        if sp or pp or ap:
             o_s += '\n[b]UNSPENT POINTS:[/b]'
-            if character.stat_alloc:
-                o_s += (
-                    '\n       [b]STAT POINTS:[/b] ' +
-                    f'{character.stat_alloc}'
-                )
-            if character.perk_alloc:
-                o_s += (
-                    '\n       [b]PERK POINTS:[/b] ' +
-                    f'{character.perk_alloc}'
-                )
-            if character.ability_alloc:
-                o_s += (
-                    '\n       [b]ABILITY POINTS:[/b] ' +
-                    f'{character.ability_alloc}'
-                )
-            o_s += '[/color]'
+            if sp:
+                o_s += f'\n       [b]STAT POINTS:[/b] {sp}'
+            if pp:
+                o_s += f'\n       [b]PERK POINTS:[/b] {pp}'
+            if ap:
+                o_s += f'\n       [b]ABILITY POINTS:[/b] {ap}'
+        o_s += '[/color]'
         return o_s
 
 
@@ -1107,20 +1067,20 @@ if path.exists('data/hungry_db.json'):
 
     for name in cdata:
         c = cdata[name]
-        char: GameCharacter = GameCharacter(
+        char: Character = Character(
             name=name,
             level=c['lv'],
             max_level=c['mlv'],
             strength=c['s'],
             agility=c['a'],
             vitality=c['v'],
-            stat_alloc=c['st'],
-            perk_alloc=c['pp'],
-            ability_alloc=c['ap'],
+            spent_stat=c['st'],
+            spent_perk=c['pp'],
+            spent_ability=c['ap'],
             wins=c['w'],
             losses=c['l'],
-            perks=c['p'],
-            abilities=c['as'],
+            perk_levels=c['p'],
+            ability_levels=c['as'],
             badge=c['b']
         )
         Game.add_character(char.name, char)
