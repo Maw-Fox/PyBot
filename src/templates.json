@@ -128,7 +128,7 @@
         "logs": "A log of moderation actions that the bot has taken.",
         "yeeted": "Let me show you my kill count. >:3~",
         "yeetus": "Gotta protect the kids from themselves. :>~",
-        "eicon": "Search the current database of known eicons.\n[b]Usage[/b]:\n   [i]\"!eicon kali\"[/i] Search all eicons with \"kali\" in its name.\n   [i]\"!eicon gif kali\"[/i] Search all animated (gif) eicons with \"kali\" in their name.\n   [i]\"!eicon png kali\"[/i] Search all static image (png) eicons with \"kali\" in their name."
+        "eicon": "Search the current database of known eicons.\n[b]Usage[/b]:\n   [i]\"!eicon kali\"[/i] Search all eicons with \"kali\" in its name.\n   [i]\"!eicon gif kali\"[/i] Search all animated (gif) eicons with \"kali\" in their name.\n   [i]\"!eicon png kali\"[/i] Search all static image (png) eicons with \"kali\" in their name.\n   [i]\"!eicon 2 png kali\"[/i] Search all static image (png) eicons with \"kali\" in their name, from the second page."
     },
     "syntax": {
         "buy": [
@@ -218,6 +218,11 @@
         "decline": [],
         "eicon": [
             {
+                "name": "page",
+                "type": "int",
+                "optional": true
+            },
+            {
                 "name": "filetype",
                 "one of": ["gif", "png"],
                 "type": "str",
@@ -225,7 +230,8 @@
             },
             {
                 "name": "search",
-                "type": "str"
+                "type": "str",
+                "optional": true
             }
         ],
         "action": [

@@ -1174,8 +1174,9 @@ class Command:
     @staticmethod
     async def eicon(
         by: Character,
-        search: str,
-        filetype: str,
+        filetype: str = '',
+        page: int = 0,
+        search: str = '',
         **kwargs
     ) -> None:
         filetype = filetype.lower()
@@ -1183,26 +1184,27 @@ class Command:
         output: Output = Output(recipient=by)
         result: list[str] = []
         names: list[str] = Verify.exists.keys()
-        t_len: int = 100
-        T_MAX: int = 50000
-        hit_cap: bool = False
+        T_MAX: int = 2000
+        page: int = page if page and page > 0 else 1
         for name in names:
             mime: str = Verify.exists[name][1]
-            if search in name:
+            if search in name or not search:
                 if filetype and filetype != mime:
                     continue
-                t_len += len(name) + 16
                 result.append(name)
-                if t_len + 32 > T_MAX:
-                    hit_cap = True
+                if len(result) > T_MAX * page:
                     break
-
+        if len(result) > T_MAX * (page - 1):
+            result = result[T_MAX * (page - 1):]
+        else:
+            return await output.send(
+                f'[b]Error:[/b] No results for page {page}.'
+            )
         await output.send(
-            f'[b]Search Results ([i]{len(result)}[/i]/{len(Verify.exists)})' +
-            '[/b]:\n[spoiler]' +
+            f'[b]Search Results ({len(result)}/{len(Verify.exists)} ' +
+            f'Page:{page})[/b]:\n[spoiler]' +
             ''.join([f'[eicon]{x}[/eicon]' for x in result]) +
-            '[/spoiler]' +
-            (f'\n[b]Warning[/b]: Hit DM char cap.' if hit_cap else '')
+            '[/spoiler]'
         )
 
     @staticmethod
