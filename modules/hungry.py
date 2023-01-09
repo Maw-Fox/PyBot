@@ -87,6 +87,7 @@ class Character():
         self.status: dict[str, Status] = {}
         self.hp: float = 1.0
         self.stamina: float = 1.0
+        self.desires_refund: int = 0
         self.modifiers: dict[str, int | float] = MODIFIER_TEMPLATE.copy()
         self.ability_modifiers: dict[str, int | float] = self.modifiers.copy()
         self.deceased: bool = False
@@ -219,23 +220,19 @@ class Passive:
 class Active:
     @staticmethod
     def attack(level: int, ref: dict[str, int | float]) -> None:
-        ref['attacking'] = 1
         ref['add_stamina'] = ceil((1 - (0.05 * (level - 1))) * 30)
 
     @staticmethod
     def heal(level: int, ref: dict[str, int | float]) -> None:
-        ref['healing'] = 1
         ref['add_heal'] = ceil((level + 1) * 4 * random()) + 5
         ref['add_stamina'] -= 25
 
     @staticmethod
     def rest(level: int, ref: dict[str, int | float]) -> None:
-        ref['resting'] = 1
         ref['add_stamina'] = ceil(40 * (1 + ((level - 1) * 0.075)))
 
     @staticmethod
     def defend(level: int, ref: dict[str, int | float]) -> None:
-        ref['defending'] = 1
         ref['add_stamina'] = ceil(20 * (1 + ((level - 1) * 0.05)))
         ref['add_damage_reduction'] = level * 1 + 3
         ref['add_damage_buffer'] = level * 2 + 4

@@ -554,14 +554,14 @@ class Command:
     ) -> None:
         action = action.lower()
         output_error: Output = Output(recipient=by)
-        targets: list[H.HungryCharacter | H.ThirstyCharacter] = []
-        char: H.GameCharacter = channel.hungry.get_ingame(by.name)
+        targets: list[H.Pred | H.Prey] = []
+        char: H.Character = channel.hungry.get_ingame(by.name)
         game: H.Game = channel.hungry
         if not char:
             return await output_error.send(
                 '[b]Hungry Game[/b]: You\'re not in this game!'
             )
-        ability: H.CharacterAbility = char.abilities.get(action.lower())
+        ability: H.Ability = char.abilities.get(action.lower())
         if not ability:
             return await output_error.send(
                 '[b]Hungry Game[/b]: Invalid ability!'
@@ -575,7 +575,7 @@ class Command:
                 '[b]Hungry Game[/b]: It\'s not your turn!'
             )
         if action == 'attack':
-            if type(char) == H.HungryCharacter:
+            if type(char) == H.Pred:
                 for p in game.prey:
                     if p.deceased:
                         continue
@@ -590,19 +590,20 @@ class Command:
     async def target(
         by: Character,
         channel: Channel,
+        ability: str,
         character: list[str],
         **kwargs
     ) -> None:
-        action = action.lower()
+        ability = ability.lower()
         output_error: Output = Output(recipient=by)
-        targets: list[H.HungryCharacter | H.ThirstyCharacter] = []
-        char: H.GameCharacter = channel.hungry.get_ingame(by.name)
+        targets: list[H.Pred | H.Prey] = []
+        char: H.Character = channel.hungry.get_ingame(by.name)
         game: H.Game = channel.hungry
         if not char:
             return await output_error.send(
                 '[b]Hungry Game[/b]: You\'re not in this game!'
             )
-        ability: H.CharacterAbility = char.abilities.get(action.lower())
+        ability: H.Ability = char.abilities.get(ability.lower())
         if not ability:
             return await output_error.send(
                 '[b]Hungry Game[/b]: Invalid ability!'
@@ -623,7 +624,7 @@ class Command:
         **kwargs
     ) -> None:
         output: Output = Output(recipient=by)
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
         if not char:
             return await output.send(
                 '[b]Hungry Game[/b]: You don\'t have a character sheet.'
@@ -653,7 +654,7 @@ class Command:
         **kwargs
     ) -> None:
         output: Output = Output(recipient=by)
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
         if not char:
             return await output.send(
                 '[b]Hungry Game[/b]: You don\'t have a character sheet.'
@@ -669,7 +670,7 @@ class Command:
         )
         await setup.output.send(
             '[b]Hungry Game[/b]: [color=red]Failed![/color] ' +
-            f'"{char.display_name}" declined the challenge.'
+            f'"{char.proper_name}" declined the challenge.'
         )
 
     @staticmethod
@@ -681,8 +682,8 @@ class Command:
         **kwargs
     ) -> None:
         pred_output: Output = Output(recipient=by)
-        prey: list[H.GameCharacter] = H.Game.get_character(character)
-        pred: H.GameCharacter = H.Game.get_character(by.name)
+        prey: list[H.Prey] = H.Game.get_character(character)
+        pred: H.Pred = H.Game.get_character(by.name)
         if not channel:
             return await output.send(
                 '[b]Hungry Game[/b]: [color=red]Failed![/color]' +
@@ -699,7 +700,7 @@ class Command:
                 ' A game is already in session!'
             )
         for idx in range(len(prey)):
-            p: H.GameCharacter | None = prey[idx]
+            p: H.Prey | None = prey[idx]
             p_name: str = character[idx]
             if not p:
                 return await output.send(
@@ -707,8 +708,8 @@ class Command:
                     f'\"{p_name}\" doesn\'t have a character sheet.'
                 )
         for p in prey:
-            await Output(recipient=get_char(p.display_name)).send(
-                f'[b]Hungry Game[/b]: {pred.display_name} has challenged you' +
+            await Output(recipient=get_char(p.proper_name)).send(
+                f'[b]Hungry Game[/b]: {pred.proper_name} has challenged you' +
                 ' to a game of [b]Hungry Game[/b] in the '
                 f'"{channel.title}" channel! Type "[i][b]!accept[/b][/i]"' +
                 ' to accept the challenge, or "[i][b]!decline[/b][/i]"' +
@@ -730,7 +731,7 @@ class Command:
     ) -> None:
         perk = perk.lower()
         output: Output = Output(recipient=by)
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
 
         if not char.perks.get(perk):
             return await output.send(
@@ -753,7 +754,7 @@ class Command:
     ) -> None:
         time_stamp: int = int(time())
         output: Output = Output(recipient=by)
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
         if not char:
             return await output.send(
                 '[b]Hungry Game[/b]: You don\'t have a character to refund.'
@@ -764,22 +765,27 @@ class Command:
                 '[b]Hungry Game[/b]: Type this command again to confirm ' +
                 'you want to refund all your spent points.'
             )
-        level: int = char.level
-        char.strength = 4
-        char.agility = 4
-        char.vitality = 4
-        char.stat_alloc = 10 + level
-        char.perk_alloc = floor(level / 2)
-        char.ability_alloc = floor(level / 4)
+        char.str = 4
+        char.agi = 4
+        char.vit = 4
+        char.spent_stat = 0
+        char.spent_perk = 0
+        char.spent_ability = 0
         for name in char.perks.copy():
-            perk: H.CharacterPerk = char.perks[name]
+            perk: H.Perk = char.perks[name]
             if perk.perkiary[name].get('cost'):
                 perk.remove()
                 char.remove_perk(name)
         for name in char.abilities.copy():
-            char.abilities[name].remove()
-            char.remove_ability(name)
-            char.add_ability(name, 1)
+            ability: H.Ability = char.abilities[name]
+            ability.remove()
+            char.abilities.pop(name)
+        for name in ['attack', 'heal', 'rest', 'defend']:
+            char.abilities[name] = H.Ability(
+                name,
+                1,
+                char
+            )
         return await output.send(
             '[b]Hungry Game[/b]: Refund complete!'
         )
@@ -793,7 +799,7 @@ class Command:
         character: str = character
         output: Output = Output(recipient=by)
         if not character:
-            char: H.GameCharacter = H.Game.get_character(by.name)
+            char: H.Character = H.Game.get_character(by.name)
             if not char:
                 return await output.send(
                     '[b]Hungry Game[/b]: You don\'t have a character.'
@@ -801,7 +807,7 @@ class Command:
             return await output.send(
                 '[b]Hungry Game[/b]:' + H.UI.sheet(char)
             )
-        char: H.GameCharacter | None = H.Game.get_character(character)
+        char: H.Character | None = H.Game.get_character(character)
         if not char:
             return await output.send(
                 f'[b]Hungry Game[/b]: Unknown character "{character}".'
@@ -817,12 +823,12 @@ class Command:
         **kwargs
     ) -> None:
         ability: str = ability.lower()
-        ability_obj: dict | None = H.CharacterAbility.abiliary.get(ability)
+        ability_obj: dict | None = H.Ability.abiliary.get(ability)
         output: Output = Output(recipient=by)
         if not ability:
             return await output.send(
                 '[b]Hungry Game[/b]: List of currently available abilities:' +
-                '\n' + '   '.join([x for x in H.CharacterAbility.abiliary]) +
+                '\n' + '   '.join([x for x in H.Ability.abiliary]) +
                 '\n[sub]Remember to use "[i]!abilities name[/i]" for ' +
                 'more info![/sub]'
             )
@@ -842,12 +848,12 @@ class Command:
         **kwargs
     ) -> None:
         perk: str = perk.lower()
-        perk_obj: dict | None = H.CharacterPerk.perkiary.get(perk)
+        perk_obj: dict | None = H.Perk.perkiary.get(perk)
         output: Output = Output(recipient=by)
         if not perk:
             perks: list[str] = []
-            for x in H.CharacterPerk.perkiary:
-                if H.CharacterPerk.perkiary[x].get('cost'):
+            for x in H.Perk.perkiary:
+                if H.Perk.perkiary[x].get('cost'):
                     perks.append(u'\U0001f4b2' + x)
                 else:
                     perks.append(u'\u2b50' + x)
@@ -873,14 +879,14 @@ class Command:
         output: Output = Output(
             recipient=by
         )
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
 
         if char:
             return await output.send(
                 '[b]Error[/b]: Already have a character under this name!'
             )
 
-        char = H.GameCharacter = H.GameCharacter(
+        char = H.Character = H.Character(
             name=by.name
         )
 
@@ -921,23 +927,24 @@ class Command:
         )
         upgrade: str = upgrade.lower()
         selection: str = selection.lower()
-        char: H.GameCharacter = H.Game.get_character(by.name)
+        char: H.Character = H.Game.get_character(by.name)
         valid_stat: dict[str, bool] = {
             'strength': True,
             'agility': True,
             'vitality': True
         }
+        sp, pp, ap = char.get_unspent()
 
         if upgrade == 'stat':
             if not valid_stat.get(selection):
                 return await output.send(
                     '[b]Error[/b]: No such stat exists.'
                 )
-            if amount > char.stat_alloc:
+            if amount > sp:
                 return await output.send(
                     '[b]Error[/b]: You do not have enough stat points to ' +
                     f'allocate {amount} stat points. Have: ' +
-                    f'{char.stat_alloc}.'
+                    f'{sp}.'
                 )
             stat: int = getattr(char, selection)
             setattr(
@@ -945,14 +952,14 @@ class Command:
                 selection,
                 stat + amount
             )
-            char.stat_alloc -= amount
+            char.spent_stat += amount
             return await output.send(
                 u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
             )
         elif upgrade == 'perk':
-            current_perk: H.CharacterPerk = char.perks.get(selection)
+            current_perk: H.Perk = char.perks.get(selection)
             name: str = selection
-            selection: dict = H.CharacterPerk.perkiary.get(selection)
+            selection: dict = H.Perk.perkiary.get(selection)
             level: int = 0
             if not selection:
                 return await output.send(
@@ -963,11 +970,11 @@ class Command:
                     '[b]Error[/b]: Perk is not purchasable.'
                 )
             cost: int = selection.get('cost') * amount
-            if cost > char.perk_alloc:
+            if cost > pp:
                 return await output.send(
                     '[b]Error[/b]: You do not have enough perk points to ' +
                     f'allocate {amount} perk points. Have: ' +
-                    f'{char.perk_alloc}.'
+                    f'{pp}.'
                 )
             if current_perk:
                 level = current_perk.level
@@ -978,14 +985,14 @@ class Command:
                     )
                 char.remove_perk(name)
             char.add_perk(name, level + amount)
-            char.perk_alloc -= cost
+            char.spent_perk += cost
             return await output.send(
                 u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
             )
         else:
-            current_ability: H.CharacterAbility = char.abilities.get(selection)
+            current_ability: H.Ability = char.abilities.get(selection)
             name: str = selection
-            selection: dict = H.CharacterAbility.abiliary.get(selection)
+            selection: dict = H.Ability.abiliary.get(selection)
             level: int = 0
             if not selection:
                 return await output.send(
@@ -996,11 +1003,11 @@ class Command:
                     '[b]Error[/b]: Ability is not purchasable.'
                 )
             cost: int = selection.get('cost') * amount
-            if cost > char.ability_alloc:
+            if cost > ap:
                 return await output.send(
                     '[b]Error[/b]: You do not have enough ability points to ' +
                     f'allocate {amount} ability points. Have: ' +
-                    f'{char.ability_alloc}.'
+                    f'{ap}.'
                 )
             if current_ability:
                 level = current_ability.level
@@ -1009,9 +1016,14 @@ class Command:
                         '[b]Error[/b]: Amount of levels to purchase over ' +
                         'the ability\'s max level.'
                     )
-                char.remove_ability(name)
-            char.add_ability(name, level + amount)
-            char.ability_alloc -= cost
+                current_ability.remove()
+            char.abilities[name] = H.Ability(
+                name,
+                current_ability.level + amount,
+                char,
+                current_ability.cooldown
+            )
+            char.spent_ability += cost
             return await output.send(
                 u'[b]Success[/b]: \U0001f4b2 Purchase successful. \U0001f4b2'
             )
