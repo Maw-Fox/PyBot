@@ -9,7 +9,6 @@ from hashlib import md5
 from time import time
 from math import floor
 from websockets.client import connect
-from functools import singledispatch as default
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.channel import Channel
@@ -47,7 +46,7 @@ class Verify:
     HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
     queue: list = []
     next: float = time() + 1.5
-    save: float = time() + 300.0
+    save: float = time() + 900.0
     exists: dict[str, tuple[str, str, int]] = get_exists()
 
     def __init__(self, check: str):
@@ -77,7 +76,7 @@ class Verify:
         t: float = time()
         if t > Verify.save:
             log('IDB/SAV')
-            Verify.save = t + 300.0
+            Verify.save = t + 900.0
             buffer: str = ''
             f = open('data/eicon_db.csv', 'w', encoding='utf-8')
             Verify.exists = dict(
@@ -101,11 +100,9 @@ class Socket:
         self.initialized: bool = False
 
     async def read(self, code, data) -> None:
-        ign: dict[str, int] = {
-            'FLN': 1, 'LIS': 1, 'NLN': 1, 'PIN': 1, 'STA': 1
-        }
+        watch: dict[str, int] = {}
         if hasattr(Response, code):
-            if not ign.get(code, 0):
+            if watch.get(code, 0):
                 log('INBOUND', code, data)
             await getattr(Response, code)(data)
 
@@ -299,13 +296,13 @@ class Response:
         )
 
         if response.status_code != 200:
-            log(f'JCH/{response.status_code}')
+            # log(f'JCH/{response.status_code}')
             return
 
         response = json.loads(response.text)
 
         if not response.get('infotags'):
-            log('JCH/DBG', response)
+            # log('JCH/DBG', response)
             if 'Invalid ticket.' == response.get('error'):
                 AUTH.get_new_auth_ticket()
             return
@@ -315,7 +312,7 @@ class Response:
         bad_age: bool = age_tester(age)
         bad_vis: bool = age_tester(vis)
 
-        log('JCH/DBG', vis, age)
+        # log('JCH/DBG', vis, age)
 
         if bad_age or bad_vis:
             age = f'[{age}]' if bad_age else age
@@ -1184,7 +1181,7 @@ class Command:
         output: Output = Output(recipient=by)
         result: list[str] = []
         names: list[str] = Verify.exists.keys()
-        T_MAX: int = 2000
+        T_MAX: int = 1500
         page: int = page if page and page > 0 else 1
         for name in names:
             mime: str = Verify.exists[name][1]
