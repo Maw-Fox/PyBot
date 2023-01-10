@@ -32,22 +32,21 @@ CHECK: dict[str, int] = {
 }
 
 
-def get_exists() -> dict[str, tuple[str, str, int]]:
-    obj: dict[str, tuple[str, str, int]] = {}
+def get_exists() -> dict[str, list[str, str, int, int]]:
+    obj: dict[str, list[str, str, int, int]] = {}
     f = open('data/eicon_db.csv', 'r', encoding='utf-8')
-    lines: list[str] = f.read()[:-1].split('\n')
+    lines: list[str] = f.read().split('\n')
     for line in lines:
-        name, extension, last_verified = line.split(',')
-        obj[name] = (name, extension, int(last_verified))
+        name, extension, last_verified, uses = line.split(',')
+        obj[name] = [name, extension, int(last_verified), int(uses)]
     return obj
 
 
 class Verify:
     HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
     queue: list = []
-    next: float = time() + 1.5
-    save: float = time() + 900.0
-    exists: dict[str, tuple[str, str, int]] = get_exists()
+    save: float = time() + 3600.0
+    exists: dict[str, list[str, str, int, int]] = get_exists()
 
     def __init__(self, check: str):
         self.check: str = check.lower()
@@ -68,30 +67,45 @@ class Verify:
 
         mime: str = response.headers.get('content-type')
         mime = mime.split('/')[1]
-        log('IDB/ADD', f'{self.check}.{mime}')
-        Verify.exists[self.check] = (self.check, mime, int(time()))
+        log(
+            'IDB/ADD',
+            f'SAV:T{int(int(time()) - Verify.save)}  >>',
+            f'{self.check}.{mime}'
+        )
+        Verify.exists[self.check] = [self.check, mime, int(time()), 1]
 
     @staticmethod
     def cycle() -> None:
         t: float = time()
         if t > Verify.save:
-            log('IDB/SAV')
-            Verify.save = t + 900.0
-            buffer: str = ''
-            f = open('data/eicon_db.csv', 'w', encoding='utf-8')
-            Verify.exists = dict(
-                sorted(Verify.exists.items(), key=lambda x: x[0])
+            log('IDB/SAV', f'NEW_DB_SIZE: {len(Verify.exists)}')
+            Verify.save = t + 3600.0
+            # Sort by alphabetical first as a secondary sort
+            # for the upcomming popularity sort
+            Verify.exists: list[str, list[str, str, int, int]] = dict(
+                sorted(
+                    Verify.exists.items(),
+                    key=lambda x: x[0]
+                )
             )
-            for name in Verify.exists:
-                name, ext, last = Verify.exists[name]
-                buffer += f'{name},{ext},{last}\n'
-            f.write(buffer)
-            f.close()
+            # Popularity sort, the primary sort category
+            Verify.exists: list[str, list[str, str, int, int]] = dict(
+                sorted(
+                    Verify.exists.items(),
+                    key=lambda x: x[1][3],
+                    reverse=True
+                )
+            )
+        f = open('data/eicon_db.csv', 'w', encoding='utf-8')
+        f.write(
+            '\n'.join(
+                [f'{w},{x},{y},{z}' for w, x, y, z in Verify.exists.values()]
+            )
+        )
+        f.close()
         if not len(Verify.queue):
             return
-        if t > Verify.next:
-            Verify.next = t + 1.5
-            Verify.queue.pop(0).do()
+        Verify.queue.pop(0).do()
 
 
 class Socket:
@@ -221,7 +235,9 @@ class Response:
         if not matches:
             return
         for m in matches:
-            if Verify.exists.get(m[1]):
+            existing: tuple[str, str, int, int] = Verify.exists.get(m[1])
+            if existing:
+                existing[3] += 1
                 continue
             Verify(m[1])
 
@@ -398,6 +414,7 @@ class Response:
             message=message[1:],
             by=char
         )
+        log('PRI/INB', data)
         if parameters['error']:
             return await output.send(
                 '[b]Error[/b]: ' + parameters['error']
@@ -1180,26 +1197,35 @@ class Command:
         search = search.lower()
         output: Output = Output(recipient=by)
         result: list[str] = []
+        result_count: list[int] = []
         names: list[str] = Verify.exists.keys()
-        T_MAX: int = 1500
+        T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
+        out_str: str = 'results'
         for name in names:
             mime: str = Verify.exists[name][1]
             if search in name or not search:
                 if filetype and filetype != mime:
                     continue
-                result.append(name)
-                if len(result) > T_MAX * page:
+                if len(result) + 1 > T_MAX * page:
+                    out_str += f' [page: {page}]'
                     break
+                result.append(name)
+                result_count.append(Verify.exists[name][3])
         if len(result) > T_MAX * (page - 1):
             result = result[T_MAX * (page - 1):]
+            result_count = result_count[T_MAX * (page - 1):]
         else:
             return await output.send(
                 f'[b]Error:[/b] No results for page {page}.'
             )
+
+        out_str = (
+            f'[b]{len(result)} {out_str}:[/b] '
+        )
+
         await output.send(
-            f'[b]Search Results ({len(result)}/{len(Verify.exists)} ' +
-            f'Page:{page})[/b]:\n[spoiler]' +
+            f'{out_str}\n[spoiler]' +
             ''.join([f'[eicon]{x}[/eicon]' for x in result]) +
             '[/spoiler]'
         )

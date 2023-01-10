@@ -1,5 +1,7 @@
 import argparse
 import requests
+import sys
+import os
 
 from pathlib import Path
 from hashlib import md5
@@ -26,23 +28,30 @@ PARSER.add_argument(
     )
 )
 
+
 ARGS = PARSER.parse_args()
 
 PATH: str = str(Path('data/eicon_db.csv').resolve())
 MAX_T: int = time() - ARGS.days * 86400
 
-print('Startin\' that prunin\'!')
+
+def log() -> None:
+    if sys.platform.startswith('win'):
+        os.system('cls')
+    else:
+        os.system('clear')
+    sys.displayhook('\n'.join(Verify.disp))
 
 
-def get_exists() -> dict[str, tuple[str, str, int]]:
-    obj: dict[str, tuple[str, str, int]] = {}
+def get_exists() -> dict[str, tuple[str, str, int, int]]:
+    obj: dict[str, tuple[str, str, int, int]] = {}
     f = open(PATH, 'r', encoding='utf-8')
-    lines: list[str] = f.read()[:-1].split('\n')
+    lines: list[str] = f.read().split('\n')
     for line in lines:
-        name, extension, last_verified = line.split(',')
+        name, extension, last_verified, count = line.split(',')
         if int(last_verified) > MAX_T:
             continue
-        obj[name] = (name, extension, int(last_verified))
+        obj[name] = (name, extension, int(last_verified), int(count))
     return obj
 
 
@@ -50,10 +59,16 @@ class Verify:
     HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
     next: float = time() + 1.0
     __step: int = 0
-    exists: dict[str, tuple[str, str, int]] = get_exists()
+    exists: dict[str, tuple[str, str, int, int]] = get_exists()
+    pruned: int = 0
+    disp: list[str] = [
+        'Prunin\' ',
+        ''
+    ]
 
-    def __init__(self, check: str):
+    def __init__(self, check: str, count: int):
         self.check: str = check.lower()
+        self.count: int = count
         queue.append(self)
 
     def do(self) -> None:
@@ -68,14 +83,20 @@ class Verify:
 
         if file_hash == Verify.HASH_404:
             Verify.exists.pop(self.check)
+            Verify.pruned += 1
             return
 
-        if not Verify.__step % 10:
-            print(f'... {len(queue)} remaining...')
+        Verify.disp[1] = f'{len(queue)} more files...'
+        log()
 
         mime: str = response.headers.get('content-type')
         mime = mime.split('/')[1]
-        Verify.exists[self.check] = (self.check, mime, int(time()))
+        Verify.exists[self.check] = (
+            self.check,
+            mime,
+            int(time()),
+            int(self.count)
+        )
 
     def itr() -> int:
         Verify.__step += 1
@@ -84,7 +105,7 @@ class Verify:
 queue: list[Verify] = []
 
 for name in Verify.exists:
-    Verify(name)
+    Verify(name, Verify.exists[name][3])
 
 for item in queue.copy():
     item.do()
@@ -92,15 +113,15 @@ for item in queue.copy():
 
 
 def finish() -> None:
-    print('Pruning complete!')
+    print(f'Pruning complete! Pruned {Verify.pruned} items!')
     buffer: str = ''
     f = open(PATH, 'w', encoding='utf-8')
     Verify.exists = dict(
         sorted(Verify.exists.items(), key=lambda x: x[0])
     )
     for name in Verify.exists:
-        name, ext, last = Verify.exists[name]
-        buffer += f'{name},{ext},{last}\n'
+        name, ext, last, count = Verify.exists[name]
+        buffer += f'{name},{ext},{last},{count}\n'
     f.write(buffer)
     f.close()
 

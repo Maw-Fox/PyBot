@@ -854,16 +854,16 @@ class UI:
         o_s: str = '\n'
         o_s += UI.get_bar_str(hp)
         if d_hp:
-            col: str = '[color=red]'
+            col: str = '  [color=red]-'
             if d_hp > 0:
-                col = '[color=green]'
-            o_s += f'{col}[sup]{d_hp}[/sup][/color]'
+                col = '  [color=green]+'
+            o_s += f'{col}+{d_hp}[/color]'
         o_s += f'\n{UI.get_bar_str(stam)}'
         if d_stam:
-            col: str = '[color=red]'
+            col: str = '  [color=red]-'
             if d_stam > 0:
-                col = '[color=green]'
-            o_s += f'{col}[sup]{d_stam}[/sup][/color]'
+                col = '  [color=green]+'
+            o_s += f'{col}{d_stam}[/color]'
         return o_s
 
     @staticmethod
