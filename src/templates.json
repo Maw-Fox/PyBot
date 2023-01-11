@@ -218,6 +218,12 @@
         "decline": [],
         "eicon": [
             {
+                "name": "flags",
+                "prefix": "-",
+                "type": "str",
+                "optional": true
+            },
+            {
                 "name": "page",
                 "type": "int",
                 "optional": true
@@ -250,6 +256,7 @@
                 "type": "int",
                 "optional": true
             }
-        ]
+        ],
+        "force_save": []
     }
 }

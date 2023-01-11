@@ -32,8 +32,8 @@ CHECK: dict[str, int] = {
 }
 
 
-def get_exists() -> dict[str, list[str, str, int, int]]:
-    obj: dict[str, list[str, str, int, int]] = {}
+def get_exists() -> dict[str, list[str | int]]:
+    obj: dict[str, list[str | int]] = {}
     f = open('data/eicon_db.csv', 'r', encoding='utf-8')
     lines: list[str] = f.read().split('\n')
     for line in lines:
@@ -46,7 +46,7 @@ class Verify:
     HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
     queue: list = []
     save: float = time() + 3600.0
-    exists: dict[str, list[str, str, int, int]] = get_exists()
+    exists: dict[str, list[str | int]] = get_exists()
 
     def __init__(self, check: str):
         self.check: str = check.lower()
@@ -75,21 +75,21 @@ class Verify:
         Verify.exists[self.check] = [self.check, mime, int(time()), 1]
 
     @staticmethod
-    def cycle() -> None:
+    def cycle(force: bool = False) -> None:
         t: float = time()
-        if t > Verify.save:
+        if t > Verify.save or force:
             log('IDB/SAV', f'NEW_DB_SIZE: {len(Verify.exists)}')
             Verify.save = t + 3600.0
             # Sort by alphabetical first as a secondary sort
             # for the upcomming popularity sort
-            Verify.exists: list[str, list[str, str, int, int]] = dict(
+            Verify.exists: dict[str, list[str | int]] = dict(
                 sorted(
                     Verify.exists.items(),
                     key=lambda x: x[0]
                 )
             )
             # Popularity sort, the primary sort category
-            Verify.exists: list[str, list[str, str, int, int]] = dict(
+            Verify.exists: dict[str, list[str | int]] = dict(
                 sorted(
                     Verify.exists.items(),
                     key=lambda x: x[1][3],
@@ -538,6 +538,19 @@ class Parser:
             arg: dict = template[idx]
             name: str = arg.get('name')
             T = arg.get('type')
+            if arg.get('prefix'):
+                if arg.get('prefix') in exploded[0]:
+                    built_args[name] = exploded.pop(0).replace(
+                        arg.get('prefix'), ''
+                    )
+                    continue
+                if not arg.get('optional'):
+                    built_args['error'] = (
+                        'Missing required parameter "' +
+                        arg['name'] + '".'
+                    )
+                    break
+                continue
             if not buffer and not arg.get('optional'):
                 built_args['error'] = (
                     'Missing required parameter "' +
@@ -1188,8 +1201,9 @@ class Command:
     @staticmethod
     async def eicon(
         by: Character,
-        filetype: str = '',
+        flags: str = '',
         page: int = 0,
+        filetype: str = '',
         search: str = '',
         **kwargs
     ) -> None:
@@ -1197,11 +1211,16 @@ class Command:
         search = search.lower()
         output: Output = Output(recipient=by)
         result: list[str] = []
-        result_count: list[int] = []
-        names: list[str] = Verify.exists.keys()
+        result_t: list[int] = []
+        names: list[str] = list(Verify.exists.keys())
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
+        sort_t, sort_r = 't' in flags, 'r' in flags
+
+        if sort_r:
+            names.reverse()
+
         for name in names:
             mime: str = Verify.exists[name][1]
             if search in name or not search:
@@ -1211,10 +1230,10 @@ class Command:
                     out_str += f' [page: {page}]'
                     break
                 result.append(name)
-                result_count.append(Verify.exists[name][3])
+                result_t.append(Verify.exists[name][2])
         if len(result) > T_MAX * (page - 1):
             result = result[T_MAX * (page - 1):]
-            result_count = result_count[T_MAX * (page - 1):]
+            result_t = result_t[T_MAX * (page - 1):]
         else:
             return await output.send(
                 f'[b]Error:[/b] No results for page {page}.'
@@ -1223,6 +1242,13 @@ class Command:
         out_str = (
             f'[b]{len(result)} {out_str}:[/b] '
         )
+
+        if sort_t:
+            result = sorted(
+                result,
+                key=lambda x: result_t[result.index(x)],
+                reverse=sort_r
+            )
 
         await output.send(
             f'{out_str}\n[spoiler]' +
@@ -1256,6 +1282,21 @@ class Command:
                 f'You got it, [b]{by.name}[/b]!' +
                 ' Yeet mode [i]disengaged[/i].'
             )
+
+    @staticmethod
+    async def force_save(
+        by: Character,
+        output: Output,
+        **kwargs
+    ) -> None:
+        if by.name == "Kali":
+            Verify.cycle(True)
+            return await output.send(
+                'Yep. ~<:'
+            )
+        await output.send(
+            'Nope. ~<:'
+        )
 
 
 async def main() -> None:
