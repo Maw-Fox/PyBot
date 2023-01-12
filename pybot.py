@@ -1,11 +1,9 @@
 import asyncio
 import json
 import requests
-import os
 import re
 
 import modules.hungry as H
-from hashlib import md5
 from time import time
 from math import floor
 from websockets.client import connect
@@ -15,97 +13,16 @@ from modules.channel import Channel
 from modules.character import Character
 from modules.utils import log, age_tester, get_char, get_chan, remove_all
 from modules.queue import Queue
-from modules.shared import UPTIME, COMMAND_TIMEOUT
 from modules.log import ModLog, MOD_LOGS
+from modules.moderation import ModAction
+from modules.icon import Icon
+from modules.documentation import Documentation, docs
 
-URL_DOMAIN: str = 'https://www.f-list.net'
-URL_PROFILE_API: str = f'{URL_DOMAIN}/json/api/character-data.php'
-WS_URI: str = 'wss://chat.f-list.net/chat2'
-PATH_CWD: str = os.getcwd()
-
-KILLS: dict[Character, int] = {}
-KILLS_LAST: dict[Character, int] = {}
-CHECK: dict[str, int] = {
-    'last': 1,
-    'every': 300,
-    'clear': 300
-}
-
-
-def get_exists() -> dict[str, list[str | int]]:
-    obj: dict[str, list[str | int]] = {}
-    f = open('data/eicon_db.csv', 'r', encoding='utf-8')
-    lines: list[str] = f.read().split('\n')
-    for line in lines:
-        name, extension, last_verified, uses = line.split(',')
-        obj[name] = [name, extension, int(last_verified), int(uses)]
-    return obj
-
-
-class Verify:
-    HASH_404: str = 'c9e84fc18b21d3cb955340909c5b369c'
-    queue: list = []
-    save: float = time() + 3600.0
-    exists: dict[str, list[str | int]] = get_exists()
-
-    def __init__(self, check: str):
-        self.check: str = check.lower()
-        Verify.queue.append(self)
-
-    def do(self) -> None:
-        response = requests.get(
-            f'https://static.f-list.net/images/eicon/{self.check}.gif'
-        )
-
-        file_hash: str = md5(
-            response.content, usedforsecurity=False
-        ).hexdigest()
-
-        if file_hash == Verify.HASH_404:
-            # This file is a 404 redirect.
-            return
-
-        mime: str = response.headers.get('content-type')
-        mime = mime.split('/')[1]
-        log(
-            'IDB/ADD',
-            f'SAV:T{int(int(time()) - Verify.save)}  >>',
-            f'{self.check}.{mime}'
-        )
-        Verify.exists[self.check] = [self.check, mime, int(time()), 1]
-
-    @staticmethod
-    def cycle(force: bool = False) -> None:
-        t: float = time()
-        if t > Verify.save or force:
-            log('IDB/SAV', f'NEW_DB_SIZE: {len(Verify.exists)}')
-            Verify.save = t + 3600.0
-            # Sort by alphabetical first as a secondary sort
-            # for the upcomming popularity sort
-            Verify.exists: dict[str, list[str | int]] = dict(
-                sorted(
-                    Verify.exists.items(),
-                    key=lambda x: x[0]
-                )
-            )
-            # Popularity sort, the primary sort category
-            Verify.exists: dict[str, list[str | int]] = dict(
-                sorted(
-                    Verify.exists.items(),
-                    key=lambda x: x[1][3],
-                    reverse=True
-                )
-            )
-        f = open('data/eicon_db.csv', 'w', encoding='utf-8')
-        f.write(
-            '\n'.join(
-                [f'{w},{x},{y},{z}' for w, x, y, z in Verify.exists.values()]
-            )
-        )
-        f.close()
-        if not len(Verify.queue):
-            return
-        Verify.queue.pop(0).do()
+DOMAIN: str = 'f-list.net'
+URI_STATIC: str = f'https://static.{DOMAIN}'
+URI_WWW: str = f'https://www.{DOMAIN}'
+URI_API: str = f'{URI_WWW}/json/api/'
+URI_WSS: str = f'wss://chat.{DOMAIN}/chat2'
 
 
 class Socket:
@@ -135,7 +52,7 @@ class Socket:
             'cversion': CONFIG.client_version
         }
         async with connect(
-            WS_URI
+            URI_WSS
         ) as websocket:
             self.current = websocket
             await websocket.send(f'IDN {json.dumps(self.identity)}')
@@ -145,7 +62,7 @@ class Socket:
                     data = message[4:]
 
                     await Queue.cycle()
-                    Verify.cycle()
+                    Icon.cycle()
                     if not self.initialized:
                         for channel in CONFIG.joined_channels:
                             parameters = json.dumps({
@@ -162,12 +79,6 @@ class Socket:
                         t: int = int(time())
                         AUTH.check_ticket()
                         H.Game.check_save(t)
-                        if t - CHECK['last'] > CHECK['every']:
-                            for char in KILLS_LAST.copy():
-                                ts: int = KILLS_LAST[char]
-                                if ts < t - CHECK['clear']:
-                                    KILLS_LAST.pop(char)
-                            CHECK['last'] = t
                     await self.read(code, data)
                 except Exception as error:
                     log('WEB/ERR', str(error))
@@ -235,11 +146,11 @@ class Response:
         if not matches:
             return
         for m in matches:
-            existing: tuple[str, str, int, int] = Verify.exists.get(m[1])
+            existing: list[str, str, int, int] = Icon.db.get(m[1])
             if existing:
                 existing[3] += 1
                 continue
-            Verify(m[1])
+            Icon(m[1])
 
     async def ERR(data) -> None:
         log('ERR/ANY', json.dumps(data))
@@ -333,28 +244,31 @@ class Response:
         if bad_age or bad_vis:
             age = f'[{age}]' if bad_age else age
             vis = f'[{vis}]' if bad_vis else vis
+            history: ModAction = ModAction.get(char.name)
+            cumulative: int = history.cumulative
 
             log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
-            KILLS[char] = KILLS.get(char, 0) + 1
 
-            if KILLS_LAST.get(char):
+            if cumulative:
                 ModLog(
                     channel=chan.name,
                     type='Age Restriction, repeated',
-                    action=f'Timeout [{KILLS[char] * 10} minutes]',
+                    action=f'Timeout [{cumulative * 10} minutes]',
                     character=char.name,
                     reason=f'age: {age}, visual: {vis}',
                     at=int(time())
                 )
+                history.last_actions.append(time())
                 return await SOCKET.send(
                     'CTU',
                     {
                         'channel': chan.name,
                         'character': char.name,
-                        'length': str((KILLS[char] - 1) * 10)
+                        'length': str(cumulative * 10)
                     }
                 )
 
+            history.last_actions.append(time())
             ModLog(
                 channel=chan.name,
                 type='Age Restriction',
@@ -363,8 +277,6 @@ class Response:
                 reason=f'age: {age}, visual: {vis}',
                 at=int(time())
             )
-
-            KILLS_LAST[char] = int(time())
 
             return await SOCKET.send(
                 'CKU',
@@ -609,12 +521,11 @@ class Parser:
         return built
 
 
-class Command:
-    doc: dict[str, str] = H.DOC['help']
-
-    doc['help'] = (
-        '[b]Help:[/b] a list off commands are below, type "!help command" ' +
-        'to see more information regarding these commands.\n' +
+Documentation(
+    'help',
+    (
+        '[b]Help:[/b] a list off commands are below, type "!help ' +
+        'command" to see more information regarding these commands.\n' +
         '   [b]General:[/b]\n      ' +
         '   '.join([
             'logs', 'yeetus', 'yeeted', '[b]help[/b]', 'eicon'
@@ -626,6 +537,11 @@ class Command:
             'abilities', 'refund'
         ]) + '\n'
     )
+)
+
+
+class Command:
+    doc: dict[str, Documentation] = docs
 
     @staticmethod
     def __append_thing_info(thing_obj: dict) -> str:
@@ -1014,13 +930,13 @@ class Command:
         **kwargs
     ) -> None:
         output: Output = Output(recipient=by)
-        help: str = Command.doc.get(sub_command)
+        help: Documentation = Command.doc.get(sub_command)
         if not help:
             return await output.send(
-                Command.doc['help']
+                Command.doc['help'].output
             )
         return await output.send(
-            help
+            help.output
         )
 
     async def buy(
@@ -1170,35 +1086,6 @@ class Command:
         )
 
     @staticmethod
-    async def yeeted(
-        channel: Channel,
-        output: Output,
-        **kwargs
-    ) -> None:
-        time_last: int = channel.states.get('last', 0)
-        time_diff_state: int = int(time()) - time_last
-
-        unique_kills: int = len(KILLS.keys())
-        kills: int = sum(KILLS.values())
-
-        if not channel or time_diff_state < COMMAND_TIMEOUT:
-            return
-
-        channel.states['last'] = int(time())
-
-        time_string: str = 'within the last [i]'
-        time_string += get_time_str(UPTIME)
-        time_string += '.[/i] [sup]:>~[/sup]'
-
-        await output.send(
-            (
-                f'I have bounced [b]{unique_kills}[/b] unique character(s) ' +
-                f'a total of [b]{kills}[/b] time(s) ' +
-                time_string
-            )
-        )
-
-    @staticmethod
     async def eicon(
         by: Character,
         flags: str = '',
@@ -1212,7 +1099,7 @@ class Command:
         output: Output = Output(recipient=by)
         result: list[str] = []
         result_t: list[int] = []
-        names: list[str] = list(Verify.exists.keys())
+        names: list[str] = list(Icon.db.keys())
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
@@ -1222,7 +1109,7 @@ class Command:
             names.reverse()
 
         for name in names:
-            mime: str = Verify.exists[name][1]
+            mime: str = Icon.db[name][1]
             if search in name or not search:
                 if filetype and filetype != mime:
                     continue
@@ -1230,7 +1117,7 @@ class Command:
                     out_str += f' [page: {page}]'
                     break
                 result.append(name)
-                result_t.append(Verify.exists[name][2])
+                result_t.append(Icon.db[name][2])
         if sort_t:
             result = sorted(
                 result,
@@ -1293,7 +1180,7 @@ class Command:
         **kwargs
     ) -> None:
         if by.name == "Kali":
-            Verify.cycle(True)
+            Icon.cycle(True)
             return await output.send(
                 'Yep. ~<:'
             )

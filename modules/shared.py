@@ -1,11 +1,6 @@
 import argparse
 import json
 
-from time import time
-
-UPTIME: int = int(time())
-COMMAND_TIMEOUT: int = 60 * 5
-
 PARSER = argparse.ArgumentParser(
     prog='PyBot',
     description='A F-Chat bot framework running in Python.',

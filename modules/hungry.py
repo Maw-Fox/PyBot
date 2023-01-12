@@ -15,6 +15,7 @@ def load_doc() -> None:
     obj: dict[str, dict[str, complex]] = json.load(f)
     for name in obj:
         DOC[name] = obj[name]
+    f.close()
 
 
 load_doc()
