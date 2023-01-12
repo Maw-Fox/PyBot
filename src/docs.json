@@ -12,9 +12,9 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!abilities\"[/b]",
+                    "[b]!abilities[/b]",
                     "[sup]Get a list of available abilities[/sup]",
-                    "[b]\"!abilities attack\"[/b]",
+                    "[b]!abilities attack[/b]",
                     "[sup]Check out info about the \"attack\" ability[/sup]"
                 ]
             }
@@ -33,9 +33,9 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!perks\"[/b]",
+                    "[b]!perks[/b]",
                     "[sup]Get a list of available perks[/sup]",
-                    "[b]\"!perks veteran\"[/b]",
+                    "[b]!perks veteran[/b]",
                     "[sup]Check out info about the veteran perk[/sup]"
                 ]
             }
@@ -66,9 +66,9 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!sheet\"[/b]",
+                    "[b]!sheet[/b]",
                     "[sup]Prints our your character sheet[/sup]",
-                    "[b]\"[i]!sheet Kali\"[/b]",
+                    "[b]!sheet Kali[/b]",
                     "[sup]Prints out \"Kali\"'s character sheet[/sup]"
                 ]
             }
@@ -87,11 +87,11 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!buy perk 4 rage-fueled\"[/b]",
+                    "[b]!buy perk 4 rage-fueled[/b]",
                     "[sup]Buy [b]4[/b] levels of a [b]perk[/b] called [b]rage-fueled[/b][/sup]",
-                    "[b]\"!buy stat 10 strength\"[/b]",
+                    "[b]!buy stat 10 strength[/b]",
                     "[sup]Buy [b]10 points[/b] of the [b]strength[/b] [b]stat[/b][/sup]",
-                    "[b]\"!buy ability heal\"[/b]",
+                    "[b]!buy ability heal[/b]",
                     "[sup]Buy [b]1[/b] level of the [b]heal[/b] [b]ability[/b][/sup]"
                 ]
             }
@@ -110,9 +110,9 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!challenge Kali\"[/b]",
+                    "[b]!challenge Kali[/b]",
                     "[sup]Challenges \"Kali\", with the challenger taking on the pred role and \"Kali\" taking on the prey role[/sup]",
-                    "[b]\"!challenge Kali, Kali2, Kali3, Kali4, Kali5\"[/b]",
+                    "[b]!challenge Kali, Kali2, Kali3, Kali4, Kali5[/b]",
                     "[sup]Challenges all five participants into a single 1v5 fight[/sup]"
                 ]
             }
@@ -131,7 +131,7 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!target kali, heal\"[/b]",
+                    "[b]!target kali, heal[/b]",
                     "[sup]Targets \"Kali\" and sets your turn for this round to heal \"Kali\"[/sup]"
                 ]
             }
@@ -150,7 +150,7 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!action attack\"[/b]",
+                    "[b]!action attack[/b]",
                     "[sup]Sets your character to \"attack\" on this round, and you will perform a damage roll against a group of prey (preds do exclusiveely cleave/AOE damage), or a pred[/sup]"
                 ]
             }
@@ -169,7 +169,7 @@
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]\"!badge raid boss\"[/b]",
+                    "[b]!badge raid boss[/b]",
                     "[sup]Sets your default badge to the badge given by the \"raid boss\" acheivement perk[/sup]"
                 ]
             }
