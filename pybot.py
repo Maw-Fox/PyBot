@@ -1231,24 +1231,27 @@ class Command:
                     break
                 result.append(name)
                 result_t.append(Verify.exists[name][2])
-        if len(result) > T_MAX * (page - 1):
-            result = result[T_MAX * (page - 1):]
-            result_t = result_t[T_MAX * (page - 1):]
-        else:
-            return await output.send(
-                f'[b]Error:[/b] No results for page {page}.'
-            )
-
-        out_str = (
-            f'[b]{len(result)} {out_str}:[/b] '
-        )
-
         if sort_t:
             result = sorted(
                 result,
                 key=lambda x: result_t[result.index(x)],
                 reverse=sort_r
             )
+        if len(result) > T_MAX * (page - 1):
+            result = result[T_MAX * (page - 1):]
+            result_t = result_t[T_MAX * (page - 1):]
+        else:
+            return await output.send(
+                f'[b]Error:[/b] No results for the search ' +
+                f'parameters [[b]page:[/b] {page}, ' +
+                '[b]flags:[/b] ' + (flags or 'no-flags') + ', ' +
+                '[b]type:[/b] ' + (filetype or 'any') + ', '
+                f'[b]search:[/b] {search}].'
+            )
+
+        out_str = (
+            f'[b]{len(result)} {out_str}:[/b] '
+        )
 
         await output.send(
             f'{out_str}\n[spoiler]' +
