@@ -32,6 +32,7 @@ class Socket:
 
     async def read(self, code, data) -> None:
         watch: dict[str, int] = {}
+        data: dict = data or {}
         if hasattr(Response, code):
             if watch.get(code, 0):
                 log('INBOUND', code, data)
@@ -88,7 +89,6 @@ class Socket:
 
 
 class Response:
-    # user -> {channels, last}
     __CIU: dict[str, dict[str, int | list[str]]] = {}
     requester: str | None = None
 
@@ -301,7 +301,7 @@ class Response:
         message: str,
         channel: str
     ) -> None:
-        log('SYS/DAT', json.dumps({'message': message, 'channel': channel}))
+        log('SYS/DAT', {'message': message, 'channel': channel})
 
     async def FLN(
         character: str
