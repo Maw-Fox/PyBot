@@ -25,6 +25,19 @@ class Icon:
         self.check: str = check.lower()
         queue.append(self)
 
+    @staticmethod
+    def is_valid(check: str) -> bool:
+        response = requests.get(
+            f'https://static.f-list.net/images/eicon/{check}.gif'
+        )
+        file_hash: str = md5(
+            response.content, usedforsecurity=False
+        ).hexdigest()
+
+        if file_hash == Icon.HASH404:
+            return False
+        return True
+
     def do(self) -> None:
         response = requests.get(
             f'https://static.f-list.net/images/eicon/{self.check}.gif'

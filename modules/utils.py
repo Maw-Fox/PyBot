@@ -2,6 +2,7 @@ import re
 import unicodedata as unicode
 
 from time import time
+from math import floor
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS
 from modules.character import Character, GLOBAL_CHARACTER_LIST
 from modules.channel import Channel, CHANNELS
@@ -104,3 +105,17 @@ def remove_all(character: Character) -> None:
 
 def get_logs(n_items: int = 10) -> list[ModLog]:
     return MOD_LOGS[:n_items]
+
+
+def get_time_str(t: int) -> str:
+    time_diff: int = int(time()) - t
+    time_days: int = floor(time_diff / 86400)
+    time_hours: int = floor((time_diff % 86400) / 3600)
+    time_minutes: int = floor((time_diff % 3600) / 60)
+    time_seconds: int = floor(time_diff % 60)
+    time_string: str = ''
+    time_string += f'{time_days} day(s), ' if time_days else ''
+    time_string += f'{time_hours} hour(s), ' if time_hours else ''
+    time_string += f'{time_minutes} minute(s), ' if time_minutes else ''
+    time_string += f'{time_seconds} second(s), ' if time_seconds else ''
+    return time_string[:len(time_string) - 2]

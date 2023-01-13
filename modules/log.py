@@ -1,9 +1,6 @@
 import json
 import os
 
-from modules.channel import Channel
-from modules.character import Character
-
 
 def _save_to_file() -> None:
     f = open('data/moderation_log.json', 'w', encoding='UTF-8')

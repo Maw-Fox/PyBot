@@ -5,13 +5,13 @@ import re
 
 import modules.hungry as H
 from time import time
-from math import floor
 from websockets.client import connect
 from modules.config import CONFIG
 from modules.auth import AUTH
 from modules.channel import Channel
 from modules.character import Character
-from modules.utils import log, age_tester, get_char, get_chan, remove_all
+from modules.utils import log, age_tester, get_char, get_chan, remove_all, \
+    get_time_str
 from modules.queue import Queue
 from modules.log import ModLog, MOD_LOGS
 from modules.moderation import ModAction
@@ -35,7 +35,7 @@ class Socket:
         if hasattr(Response, code):
             if watch.get(code, 0):
                 log('INBOUND', code, data)
-            await getattr(Response, code)(data)
+            await getattr(Response, code)(**data)
 
     async def send(self, code: str, message: str = '') -> None:
         if message:
@@ -87,39 +87,28 @@ class Socket:
         await self.current.close()
 
 
-def get_time_str(t: int) -> str:
-    time_diff: int = int(time()) - t
-    time_days: int = floor(time_diff / 86400)
-    time_hours: int = floor((time_diff % 86400) / 3600)
-    time_minutes: int = floor((time_diff % 3600) / 60)
-    time_seconds: int = floor(time_diff % 60)
-    time_string: str = ''
-    time_string += f'{time_days} day(s), ' if time_days else ''
-    time_string += f'{time_hours} hour(s), ' if time_hours else ''
-    time_string += f'{time_minutes} minute(s), ' if time_minutes else ''
-    time_string += f'{time_seconds} second(s), ' if time_seconds else ''
-    return time_string[:len(time_string) - 2]
-
-
 class Response:
     # user -> {channels, last}
     __CIU: dict[str, dict[str, int | list[str]]] = {}
     requester: str | None = None
 
-    async def CIU(data) -> None:
-        character_name: str = data['sender']
-        output: Output = Output(recipient=character_name)
+    async def CIU(
+        sender: str,
+        name: str
+    ) -> None:
+        char: Character = get_char(sender)
+        output: Output = Output(recipient=char)
         t: int = int(time())
-        char_data = Response.__CIU.get(character_name)
-        if data['name'].lower()[:3] != 'adh':
+        char_data = Response.__CIU.get(sender)
+        if name.lower()[:3] != 'adh':
             return await output(
                 '[b]No.[/b]'
             )
-        log('CHA/INV', data['sender'], data['name'])
+        log('CHA/INV', sender, name)
         if char_data:
             last_t: int = char_data.get('last', t)
             channels: list[str] = char_data.get('channels')
-            if data['name'] in channels:
+            if name in channels:
                 return await output(
                     'You\'ve tried this already, [b]no means no[/b].'
                 )
@@ -128,20 +117,24 @@ class Response:
                     'Please wait at least 15 minutes before attempting to ' +
                     'invite the bot again.'
                 )
-        Response.requester: str = data['sender']
+        Response.requester: str = sender
         return await SOCKET.send(
             'JCH',
             {
-                'channel': data['name']
+                'channel': sender
             }
         )
 
-    async def STA(data) -> None:
-        if not data['statusmsg']:
+    async def STA(
+        status: str,
+        character: str,
+        statusmsg: str
+    ) -> None:
+        if not statusmsg:
             return
         matches: list[tuple[str, str, str]] = re.findall(
             '(\\[eicon\\])([^\\[\\]]+)(\\[/eicon\\])',
-            data['statusmsg']
+            statusmsg
         )
         if not matches:
             return
@@ -152,18 +145,25 @@ class Response:
                 continue
             Icon(m[1])
 
-    async def ERR(data) -> None:
-        log('ERR/ANY', json.dumps(data))
+    async def ERR(
+        message: str,
+        number: int
+    ) -> None:
+        log('ERR/ANY', f'{number}::{message}')
 
-    async def ORS(data) -> None:
-        for i in data['channels']:
-            c_data: dict = data['channels'][i]
-            if not get_chan(data['channels'][i].name):
+    async def ORS(
+        channels: list[dict[str, str | int]]
+    ) -> None:
+        for i in channels:
+            c_data = channels[i]
+            if not get_chan(c_data.name):
                 Channel(**c_data)
 
-    async def LIS(data) -> None:
+    async def LIS(
+        characters: list[tuple[str, str, str, str]]
+    ) -> None:
         # data array -> name, gender, status, status msg
-        for c_data in data['characters']:
+        for c_data in characters:
             Character(
                 c_data[0],
                 c_data[1].lower(),
@@ -171,20 +171,27 @@ class Response:
                 c_data[3]
             )
 
-    async def ICH(data) -> None:
-        chan: Channel = get_chan(data['channel'])
+    async def ICH(
+        users: list[dict[str, str]],
+        channel: str,
+        mode: int
+    ) -> None:
+        chan: Channel = get_chan(channel)
 
-        for c_data in data['users']:
-            chan.add_char(get_char(c_data['identity']))
+        for user in users:
+            chan.add_char(get_char(user['identity']))
 
-    async def COL(data) -> None:
-        chan: Channel = get_chan(data['channel'])
+    async def COL(
+        channel: str,
+        oplist: list[str]
+    ) -> None:
+        chan: Channel = get_chan(channel)
 
-        for char_str in data['oplist']:
-            if not char_str:
+        for op in oplist:
+            if not op:
                 continue
 
-            chan.add_op(char_str)
+            chan.add_op(op)
 
         if Response.requester:
             if chan.is_op(Response.requester):
@@ -198,13 +205,17 @@ class Response:
             return await SOCKET.send(
                 'LCH',
                 {
-                    'channel': chan.name
+                    'channel': channel
                 }
             )
 
-    async def JCH(data) -> None:
-        char: Character = get_char(data['character']['identity'])
-        chan: Channel = get_chan(data['channel'])
+    async def JCH(
+        channel: str,
+        character: dict[str, str],
+        title: str
+    ) -> None:
+        char: Character = get_char(character['identity'])
+        chan: Channel = get_chan(channel)
 
         chan.add_char(char)
 
@@ -286,29 +297,44 @@ class Response:
                 }
             )
 
-    async def SYS(data) -> None:
-        log('SYS/DAT', data)
+    async def SYS(
+        message: str,
+        channel: str
+    ) -> None:
+        log('SYS/DAT', json.dumps({'message': message, 'channel': channel}))
 
-    async def FLN(data) -> None:
-        remove_all(get_char(data['character']))
+    async def FLN(
+        character: str
+    ) -> None:
+        remove_all(get_char(character))
 
-    async def NLN(data) -> None:
+    async def NLN(
+        identity: str,
+        gender: str,
+        status: str
+    ) -> None:
         Character(
-            data['identity'],
-            data['gender'],
-            data['status']
+            identity,
+            gender,
+            status
         )
 
-    async def LCH(data) -> None:
-        char: Character = get_char(data['character'])
-        get_chan(data['channel']).remove_char(char)
+    async def LCH(
+        channel: str,
+        character: str
+    ) -> None:
+        char: Character = get_char(character)
+        get_chan(channel).remove_char(char)
 
-    async def PIN(data) -> None:
+    async def PIN() -> None:
         await Output.ping()
 
-    async def PRI(data) -> None:
-        message: str = data['message']
-        char: Character = get_char(data['character'])
+    async def PRI(
+        character: str,
+        message: str,
+        recipient: str
+    ) -> None:
+        char: Character = get_char(character)
         output: Output = Output(recipient=char)
 
         if message[:1] != '!':
@@ -326,7 +352,7 @@ class Response:
             message=message[1:],
             by=char
         )
-        log('PRI/INB', data)
+        log('PRI/INB', character, message)
         if parameters['error']:
             return await output.send(
                 '[b]Error[/b]: ' + parameters['error']
@@ -336,10 +362,13 @@ class Response:
             **parameters
         )
 
-    async def MSG(data) -> None:
-        message: str = data['message']
-        char: Character = get_char(data['character'])
-        chan: Channel = get_chan(data['channel'])
+    async def MSG(
+        character: str,
+        message: str,
+        channel: str
+    ) -> None:
+        char: Character = get_char(character)
+        chan: Channel = get_chan(channel)
         output: Output = Output(channel=chan)
 
         if message[:1] != '!':
@@ -528,7 +557,7 @@ Documentation(
         'command" to see more information regarding these commands.\n' +
         '   [b]General:[/b]\n      ' +
         '   '.join([
-            'logs', 'yeetus', 'yeeted', '[b]help[/b]', 'eicon'
+            'logs', 'yeetus', 'yeeted', '[b]help[/b]', 'icon', 'deadicon'
         ]) + '\n'
         '   [b]Hungry Game:[/b]\n      ' +
         '   '.join([
@@ -1086,7 +1115,34 @@ class Command:
         )
 
     @staticmethod
-    async def eicon(
+    async def deadicon(
+        by: Character,
+        name: str,
+        **kwargs
+    ) -> None:
+        name: str = name.lower()
+        output: Output = Output(recipient=by)
+
+        if not Icon.db.get(name):
+            return await output.send(
+                f'[b]Error[/b]: "{name}" does not exist in the database.'
+            )
+
+        valid: bool = Icon.is_valid(name)
+
+        if not valid:
+            Icon.db.pop(name)
+            return await output.send(
+                f'[b]Icons[/b]: "{name}" removed from the database, thank you!'
+            )
+
+        return await output.send(
+            f'[b]Icons[/b]: "{name}" is still valid, but thanks for ' +
+            'the report!'
+        )
+
+    @staticmethod
+    async def icon(
         by: Character,
         flags: str = '',
         page: int = 0,
@@ -1099,15 +1155,15 @@ class Command:
         output: Output = Output(recipient=by)
         result: list[str] = []
         result_t: list[int] = []
-        names: list[str] = list(Icon.db.keys())
+        names: list[str] = list(Icon.db.keys()).copy()
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
-        sort_t, sort_r = 't' in flags, 'r' in flags
-
+        sort_t, sort_r, sort_a = 't' in flags, 'r' in flags, 'a' in flags
+        if sort_a:
+            names.sort()
         if sort_r:
             names.reverse()
-
         for name in names:
             mime: str = Icon.db[name][1]
             if search in name or not search:

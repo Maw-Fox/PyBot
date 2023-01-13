@@ -199,7 +199,7 @@
         "create": [],
         "accept": [],
         "decline": [],
-        "eicon": [
+        "icon": [
             {
                 "name": "flags",
                 "prefix": "-",
@@ -222,6 +222,13 @@
                 "type": "str",
                 "multi": true,
                 "optional": true
+            }
+        ],
+        "deadicon": [
+            {
+                "name": "name",
+                "type": "str",
+                "multi": true
             }
         ],
         "action": [

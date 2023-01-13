@@ -187,14 +187,14 @@
             {
                 "name":"Syntax",
                 "subtext": [
-                    "[b]!eicon [-flag] [page number] [gif or png] [search pattern][/b]",
+                    "[b]!icon [-flag] [page number] [gif or png] [search pattern][/b]",
                     "[sup]All parameters are [b]optional[/b][/sup]"
                 ]
             },
             {
                 "name":"Usage",
                 "subtext": [
-                    "[b]!eicon -r 2 gif kali[/b]",
+                    "[b]!icon -r 2 gif kali[/b]",
                     "[sup]This is a search that requests \"page 2\" of \"animated eicons\" with the search phrase \"kali\" and sorted in reverse (-r flag)[/sup]"
                 ]
             },
@@ -202,6 +202,7 @@
                 "name":"Flags",
                 "subtext": [
                     "[b]r:[/b]\n      [sup]Reversed order[/sup]",
+                    "[b]a:[/b]\n      [sup]Sort by alphabetical order, useful for finding mosiacs[/sup]",
                     "[b]t:[/b]\n      [sup]Ordered by most recently verified icons. \"Verified\" means that the icon has been verified to not have been deleted since it was initially stored within the database[/sup]"
                 ]
             },
@@ -209,6 +210,25 @@
                 "name":"Notes",
                 "subtext": [
                     "The max results per page is 2000. Multiple flags can be used at the same time, such as \"-rt\".\n   By default, the sorting is done by popularity with a secondary alphabetical sort. This is the same sorting algorithm that the database uses."
+                ]
+            }
+        ]
+    },
+    "deadicon": {
+        "pretense": "Request the bot check an icon to make sure it's still valid.",
+        "subtext": [
+            {
+                "name":"Syntax",
+                "subtext": [
+                    "[b]!deadicon [name][/b]",
+                    "[sup]All parameters are [b]required[/b][/sup]"
+                ]
+            },
+            {
+                "name":"Usage",
+                "subtext": [
+                    "[b]!deadicon kali01[/b]",
+                    "[sup]Tell the bot to check the \"kali01\" eicon.[/sup]"
                 ]
             }
         ]
