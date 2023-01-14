@@ -5,7 +5,12 @@ from modules.typedefs import DbRow
 from modules.utils import log
 
 
-def build_db() -> dict[str, DbRow]:
+def _build_blacklist() -> list[str]:
+    f = open('data/blacklist.csv', 'r', encoding='utf-8')
+    return f.read()[:-1].split('\n')
+
+
+def _build_db() -> dict[str, DbRow]:
     obj: dict[str, DbRow] = {}
     f = open('data/eicon_db.csv', 'r', encoding='utf-8')
     lines: list[str] = str(f.read()).split('\n')
@@ -18,8 +23,9 @@ def build_db() -> dict[str, DbRow]:
 
 class Icon:
     HASH404: str = 'c9e84fc18b21d3cb955340909c5b369c'
-    save: float = time() + 3600.0
-    db: dict[str, DbRow] = build_db()
+    save: float = time() + 600.0
+    db: dict[str, DbRow] = _build_db()
+    blacklist: list[str] = _build_blacklist()
 
     def __init__(self, check: str):
         self.check: str = check.lower()
@@ -39,6 +45,10 @@ class Icon:
         return True
 
     def do(self) -> None:
+        for blacklisted in Icon.blacklist:
+            if blacklisted in self.check:
+                continue
+
         response = requests.get(
             f'https://static.f-list.net/images/eicon/{self.check}.gif'
         )
@@ -63,8 +73,8 @@ class Icon:
         t: float = time()
         if t > Icon.save or force:
             log('IDB/SAV', f'NEW_DB_SIZE: {len(Icon.db)}')
-            Icon.save = t + 3600.0
-            # Sort by alphabetical first as a secondary sort
+            Icon.save = t + 600.0
+            # Sort by alphanumeric
             Icon.db: dict[str, list[str | int]] = dict(
                 sorted(
                     Icon.db.items(),
@@ -79,13 +89,13 @@ class Icon:
                     reverse=True
                 )
             )
-        f = open('data/eicon_db.csv', 'w', encoding='utf-8')
-        f.write(
-            '\n'.join(
-                [f'{w},{x},{y},{z}' for w, x, y, z in Icon.db.values()]
+            f = open('data/eicon_db.csv', 'w', encoding='utf-8')
+            f.write(
+                '\n'.join(
+                    [f'{w},{x},{y},{z}' for w, x, y, z in Icon.db.values()]
+                )
             )
-        )
-        f.close()
+            f.close()
         if not len(queue):
             return
         queue.pop(0).do()

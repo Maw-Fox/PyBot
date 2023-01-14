@@ -1,0 +1,140 @@
+{
+    "syntax": {
+        "buy": [
+            {
+                "name": "upgrade",
+                "type": "str",
+                "one_of": {
+                    "perk": 1,
+                    "stat": 1,
+                    "ability": 1
+                }
+            },
+            {
+                "name": "amount",
+                "type": "int",
+                "optional": true
+            },
+            {
+                "name": "selection",
+                "type": "str",
+                "multi": true
+            }
+        ],
+        "challenge": [
+            {
+                "name": "character",
+                "type": "list",
+                "multi": true
+            }
+        ],
+        "help": [
+            {
+                "name": "sub_command",
+                "type": "str",
+                "optional": true
+            }
+        ],
+        "badge": [
+            {
+                "name": "perk",
+                "type": "str",
+                "multi": true,
+                "last": true
+            }
+        ],
+        "sheet": [
+            {
+                "name": "character",
+                "type": "str",
+                "last": true,
+                "multi": true,
+                "optional": true
+            }
+        ],
+        "target": [
+            {
+                "name": "character",
+                "type": "str",
+                "last": false
+            },
+            {
+                "name": "ability",
+                "type": "str"
+            }
+        ],
+        "perks": [
+            {
+                "name": "perk",
+                "type": "str",
+                "multi": true,
+                "last": true,
+                "optional": true
+            }
+        ],
+        "refund": [],
+        "abilities": [
+            {
+                "name": "ability",
+                "type": "str",
+                "last": true,
+                "multi": true,
+                "optional": true
+            }
+        ],
+        "create": [],
+        "accept": [],
+        "decline": [],
+        "icon": [
+            {
+                "name": "flags",
+                "prefix": "-",
+                "type": "str",
+                "optional": true
+            },
+            {
+                "name": "page",
+                "type": "int",
+                "optional": true
+            },
+            {
+                "name": "filetype",
+                "one of": ["gif", "png"],
+                "type": "str",
+                "optional": true
+            },
+            {
+                "name": "search",
+                "type": "str",
+                "multi": true,
+                "optional": true
+            }
+        ],
+        "deadicon": [
+            {
+                "name": "name",
+                "type": "str",
+                "multi": true
+            }
+        ],
+        "action": [
+            {
+                "name": "action",
+                "type": "str",
+                "multi": true,
+                "last": true
+            }
+        ],
+        "yeetus": [],
+        "logs": [
+            {
+                "name": "amount",
+                "type": "int",
+                "optional": true
+            }
+        ],
+        "force_save": [],
+        "verify": [],
+        "banlist": []
+    }
+}

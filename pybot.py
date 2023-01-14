@@ -12,7 +12,7 @@ from modules.channel import Channel
 from modules.character import Character
 from modules.utils import log, age_tester, get_char, get_chan, remove_all, \
     get_time_str
-from modules.queue import Queue
+from modules.queue import Queue, SUB_QUEUE
 from modules.log import ModLog, MOD_LOGS
 from modules.moderation import ModAction
 from modules.icon import Icon
@@ -23,6 +23,19 @@ URI_STATIC: str = f'https://static.{DOMAIN}'
 URI_WWW: str = f'https://www.{DOMAIN}'
 URI_API: str = f'{URI_WWW}/json/api/'
 URI_WSS: str = f'wss://chat.{DOMAIN}/chat2'
+
+CMD_ARG_DEF: dict[str, list] = {}
+
+
+def load_cmd_arg_def() -> None:
+    f = open('src/cmd_arg_def.json', 'r', encoding='utf-8')
+    obj: dict[str, dict[str, list]] = json.load(f)
+    for name in obj:
+        CMD_ARG_DEF[name] = obj[name]
+    f.close()
+
+
+load_cmd_arg_def()
 
 
 class Socket:
@@ -86,6 +99,100 @@ class Socket:
 
     async def close(self) -> None:
         await self.current.close()
+
+
+class Verification:
+    def __init__(self, character: str, channel: str):
+        self.character: str = character
+        self.channel: str = channel
+
+    @staticmethod
+    async def verify(character: str, channel: str):
+        response = requests.post(
+            'https://www.f-list.net/json/api/character-data.php',
+            data={
+                'account': CONFIG.account_name,
+                'ticket': AUTH.auth_key,
+                'name': character,
+            }
+        )
+
+        if response.status_code != 200:
+            return
+
+        response = json.loads(response.text)
+
+        if not response.get('infotags'):
+            # log('JCH/DBG', response)
+            if 'Invalid ticket.' == response.get('error'):
+                AUTH.get_new_auth_ticket()
+            return
+
+        vis: str = response['infotags'].get('64', '')
+        age: str = response['infotags'].get('1', '')
+        bad_age: bool = age_tester(age)
+        bad_vis: bool = age_tester(vis)
+
+        log('VER/DBG', vis, age)
+
+        if bad_age or bad_vis:
+            age = f'[{age}]' if bad_age else age
+            vis = f'[{vis}]' if bad_vis else vis
+            history: ModAction = ModAction.get(character)
+            cumulative: int = history.cumulative()
+            log('VER/CUM', cumulative, history.last_actions)
+            log('VER/DBG', f'Kick {character}, age:{age}, visual:{vis}', io=0)
+
+            if cumulative:
+                log(
+                    'JCH/DBG',
+                    f'Upgraded to timeout for [{cumulative * 10}] minutes',
+                    io=0
+                )
+                ModLog(
+                    channel=channel,
+                    type='Age Restriction, repeated',
+                    action=f'Timeout [{cumulative * 10} minutes]',
+                    character=character,
+                    reason=f'age: {age}, visual: {vis}',
+                    at=int(time())
+                )
+                history.last_actions.append(time())
+                return await SOCKET.send(
+                    'CTU',
+                    {
+                        'channel': channel,
+                        'character': character,
+                        'length': str(cumulative * 10)
+                    }
+                )
+
+            history.last_actions.append(time())
+            ModLog(
+                channel=channel,
+                type='Age Restriction',
+                action='Kick',
+                character=character,
+                reason=f'age: {age}, visual: {vis}',
+                at=int(time())
+            )
+
+            return await SOCKET.send(
+                'CKU',
+                {
+                    'channel': channel,
+                    'character': character
+                }
+            )
+
+    async def run(self, data):
+        log(
+            'VERIFY',
+            self.character,
+            self.channel,
+            f'{len(SUB_QUEUE)} remaining.'
+        )
+        await Verification.verify(self.character, self.channel)
 
 
 class Response:
@@ -162,12 +269,12 @@ class Response:
     async def LIS(
         characters: list[tuple[str, str, str, str]]
     ) -> None:
-        # data array -> name, gender, status, status msg
+        # tuple -> name, gender, status, status msg
         for c_data in characters:
             Character(
                 c_data[0],
                 c_data[1].lower(),
-                c_data[2],
+                c_data[2].lower(),
                 c_data[3]
             )
 
@@ -219,83 +326,10 @@ class Response:
 
         chan.add_char(char)
 
-        if not chan.states.get('yeetus', False) and (
-            chan.name not in CONFIG.joined_channels
-        ):
+        if chan.name not in CONFIG.joined_channels:
             return
 
-        response = requests.post(
-            'https://www.f-list.net/json/api/character-data.php',
-            data={
-                'account': CONFIG.account_name,
-                'ticket': AUTH.auth_key,
-                'name': char.name,
-            }
-        )
-
-        if response.status_code != 200:
-            # log(f'JCH/{response.status_code}')
-            return
-
-        response = json.loads(response.text)
-
-        if not response.get('infotags'):
-            # log('JCH/DBG', response)
-            if 'Invalid ticket.' == response.get('error'):
-                AUTH.get_new_auth_ticket()
-            return
-
-        vis: str = response['infotags'].get('64', '')
-        age: str = response['infotags'].get('1', '')
-        bad_age: bool = age_tester(age)
-        bad_vis: bool = age_tester(vis)
-
-        # log('JCH/DBG', vis, age)
-
-        if bad_age or bad_vis:
-            age = f'[{age}]' if bad_age else age
-            vis = f'[{vis}]' if bad_vis else vis
-            history: ModAction = ModAction.get(char.name)
-            cumulative: int = history.cumulative
-
-            log('JCH/DBG', f'Kick {char.name}, age:{age}, visual:{vis}', io=0)
-
-            if cumulative:
-                ModLog(
-                    channel=chan.name,
-                    type='Age Restriction, repeated',
-                    action=f'Timeout [{cumulative * 10} minutes]',
-                    character=char.name,
-                    reason=f'age: {age}, visual: {vis}',
-                    at=int(time())
-                )
-                history.last_actions.append(time())
-                return await SOCKET.send(
-                    'CTU',
-                    {
-                        'channel': chan.name,
-                        'character': char.name,
-                        'length': str(cumulative * 10)
-                    }
-                )
-
-            history.last_actions.append(time())
-            ModLog(
-                channel=chan.name,
-                type='Age Restriction',
-                action='Kick',
-                character=char.name,
-                reason=f'age: {age}, visual: {vis}',
-                at=int(time())
-            )
-
-            return await SOCKET.send(
-                'CKU',
-                {
-                    'channel': chan.name,
-                    'character': char.name
-                }
-            )
+        await Verification.verify(char.name, chan.name)
 
     async def SYS(
         message: str,
@@ -449,7 +483,7 @@ class Output:
 
 
 class Parser:
-    templates: dict[str, list] = H.DOC['syntax']
+    templates: dict[str, list] = CMD_ARG_DEF
 
     @staticmethod
     def __parse(
@@ -1154,14 +1188,19 @@ class Command:
         search = search.lower()
         output: Output = Output(recipient=by)
         result: list[str] = []
-        result_t: list[int] = []
-        names: list[str] = list(Icon.db.keys()).copy()
+        names: list[str] = list(Icon.db.keys())
+        times: list[int] = [x[2] for x in Icon.db.values()]
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
-        sort_t, sort_r, sort_a = 't' in flags, 'r' in flags, 'a' in flags
+        sort_t, sort_r, sort_a = ['t' in flags, 'r' in flags, 'a' in flags]
         if sort_a:
             names.sort()
+        if sort_t:
+            names = sorted(
+                names,
+                key=lambda x: times[names.index(x)]
+            )
         if sort_r:
             names.reverse()
         for name in names:
@@ -1173,16 +1212,8 @@ class Command:
                     out_str += f' [page: {page}]'
                     break
                 result.append(name)
-                result_t.append(Icon.db[name][2])
-        if sort_t:
-            result = sorted(
-                result,
-                key=lambda x: result_t[result.index(x)],
-                reverse=sort_r
-            )
         if len(result) > T_MAX * (page - 1):
             result = result[T_MAX * (page - 1):]
-            result_t = result_t[T_MAX * (page - 1):]
         else:
             return await output.send(
                 f'[b]Error:[/b] No results for the search ' +
@@ -1193,7 +1224,7 @@ class Command:
             )
 
         out_str = (
-            f'[b]{len(result)} {out_str}:[/b] '
+            f'[b]{len(result)} {out_str} [db:{len(Icon.db)}]:[/b] '
         )
 
         await output.send(
@@ -1227,6 +1258,32 @@ class Command:
             await output.send(
                 f'You got it, [b]{by.name}[/b]!' +
                 ' Yeet mode [i]disengaged[/i].'
+            )
+
+    @staticmethod
+    async def verify(
+        by: Character,
+        channel: Channel,
+        output: Output,
+        **kwargs
+    ) -> None:
+        if not channel.is_op(by.name):
+            return await output.send(
+                '[b]Error[/b]: You must construct additional pylons. ' +
+                'This command requires channel operator status.'
+            )
+        await output.send(
+            'It\'s time for a murder! Verification process starting!'
+        )
+        for char in channel.characters:
+            char_verify: Verification = Verification(
+                char.name,
+                channel.name
+            )
+            Queue(
+                char_verify.run,
+                None,
+                True
             )
 
     @staticmethod

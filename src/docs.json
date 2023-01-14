@@ -232,5 +232,11 @@
                 ]
             }
         ]
+    },
+    "verify": {
+        "pretense": "Delete children."
+    },
+    "banlist": {
+        "pretense": "Prune banlist."
     }
 }

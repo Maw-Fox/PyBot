@@ -11,7 +11,7 @@ DOC: dict[str, dict[str, complex]] = {}
 
 
 def load_doc() -> None:
-    f = open('src/templates.json', 'r', encoding='utf-8')
+    f = open('src/game_templates.json', 'r', encoding='utf-8')
     obj: dict[str, dict[str, complex]] = json.load(f)
     for name in obj:
         DOC[name] = obj[name]

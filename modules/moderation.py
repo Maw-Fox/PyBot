@@ -3,24 +3,20 @@ from time import time
 
 class ModAction:
     def __init__(self, cname: str):
-        self.last_actions: list[float] = []
+        self.last_actions: list[float] = [time()]
         self.name: str = cname
+        characters[cname] = self
 
-    @staticmethod
     def get(cname: str):
-        history: ModAction | None = __characters.get(cname, None)
+        history: ModAction | None = characters.get(cname, None)
         if not history:
             return ModAction(cname)
+        history.last_actions.append(time())
         return history
 
-    @property
-    def characters():
-        return __characters
-
-    @property
     def cumulative(self) -> int:
         t: float = time()
-        act_sum: int = 0
+        act_sum: int = -1
         if len(self.last_actions):
             for act_t in self.last_actions:
                 if act_t + 3600.0 > t:
@@ -28,4 +24,4 @@ class ModAction:
         return act_sum
 
 
-__characters: dict[str, ModAction] = {}
+characters: dict[str, ModAction] = {}
