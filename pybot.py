@@ -28,7 +28,7 @@ CMD_ARG_DEF: dict[str, list] = {}
 
 
 def load_cmd_arg_def() -> None:
-    f = open('src/cmd_arg_def.json', 'r', encoding='utf-8')
+    f = open('src/cmd_arg_defs.json', 'r', encoding='utf-8')
     obj: dict[str, dict[str, list]] = json.load(f)
     for name in obj:
         CMD_ARG_DEF[name] = obj[name]
@@ -246,7 +246,7 @@ class Response:
         if not matches:
             return
         for m in matches:
-            existing: list[str, str, int, int] = Icon.db.get(m[1])
+            existing: list[str, str, int, int] = Icon.db.pop.get(m[1])
             if existing:
                 existing[3] += 1
                 continue
@@ -1157,7 +1157,7 @@ class Command:
         name: str = name.lower()
         output: Output = Output(recipient=by)
 
-        if not Icon.db.get(name):
+        if not Icon.db.pop.get(name):
             return await output.send(
                 f'[b]Error[/b]: "{name}" does not exist in the database.'
             )
@@ -1165,7 +1165,7 @@ class Command:
         valid: bool = Icon.is_valid(name)
 
         if not valid:
-            Icon.db.pop(name)
+            Icon.db.remove(name)
             return await output.send(
                 f'[b]Icons[/b]: "{name}" removed from the database, thank you!'
             )
@@ -1188,23 +1188,19 @@ class Command:
         search = search.lower()
         output: Output = Output(recipient=by)
         result: list[str] = []
-        names: list[str] = list(Icon.db.keys())
-        times: list[int] = [x[2] for x in Icon.db.values()]
+        names: list[str] = list(Icon.db.pop.keys())
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
         sort_t, sort_r, sort_a = ['t' in flags, 'r' in flags, 'a' in flags]
         if sort_a:
-            names.sort()
+            names = list(Icon.db.alp.keys())
         if sort_t:
-            names = sorted(
-                names,
-                key=lambda x: times[names.index(x)]
-            )
+            names = list(Icon.db.ver.keys())
         if sort_r:
             names.reverse()
         for name in names:
-            mime: str = Icon.db[name][1]
+            mime: str = Icon.db.pop[name][1]
             if search in name or not search:
                 if filetype and filetype != mime:
                     continue
@@ -1224,7 +1220,7 @@ class Command:
             )
 
         out_str = (
-            f'[b]{len(result)} {out_str} [db:{len(Icon.db)}]:[/b] '
+            f'[b]{len(result)} {out_str} [db:{len(Icon.db.pop)}]:[/b] '
         )
 
         await output.send(

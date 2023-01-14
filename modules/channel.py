@@ -8,7 +8,7 @@ class Channel:
     ) -> None:
         self.name: str = name
         self.title: str = name
-        self.characters: dict[str, Character] = {}
+        self.characters: dict[Character, Character] = {}
         self.ops: dict[str, int] = {}
         self.hungry = None
         self.setup: bool = False
