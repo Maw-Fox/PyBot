@@ -1179,7 +1179,7 @@ class Command:
     async def icon(
         by: Character,
         flags: str = '',
-        page: int = 0,
+        page: int = 1,
         filetype: str = '',
         search: str = '',
         **kwargs
@@ -1187,8 +1187,8 @@ class Command:
         filetype = filetype.lower()
         search = search.lower()
         output: Output = Output(recipient=by)
-        result: list[str] = []
         names: list[str] = list(Icon.db.pop.keys())
+        result: list[str] = []
         T_MAX: int = 2000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
@@ -1205,7 +1205,6 @@ class Command:
                 if filetype and filetype != mime:
                     continue
                 if len(result) + 1 > T_MAX * page:
-                    out_str += f' [page: {page}]'
                     break
                 result.append(name)
         if len(result) > T_MAX * (page - 1):

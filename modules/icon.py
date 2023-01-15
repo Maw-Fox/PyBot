@@ -1,5 +1,5 @@
 import requests
-from time import time, perf_counter_ns
+from time import time, perf_counter
 from hashlib import md5
 from modules.typedefs import DbRow
 from modules.utils import log
@@ -27,10 +27,10 @@ class IconCache:
         self.pop: dict[str, DbRow] = items.copy()
         self.ver: dict[str, DbRow] = items.copy()
 
-        self.alpha = dict(
+        self.alp = dict(
             sorted(self.alp.items(), key=lambda x: x[0])
         )
-        self.verified = dict(
+        self.ver = dict(
             sorted(self.ver.items(), key=lambda x: x[1][2])
         )
 
@@ -45,7 +45,7 @@ class IconCache:
         self.ver.pop(item)
 
     def sort(self) -> None:
-        ns_start: int = perf_counter_ns()
+        ns_start: int = perf_counter()
         self.alp = dict(
             sorted(
                 self.alp.items(),
@@ -54,7 +54,7 @@ class IconCache:
         )
         self.pop = dict(
             sorted(
-                self.pop.items(),
+                self.alp.items(),
                 key=lambda x: x[1][3]
             )
         )
@@ -64,8 +64,8 @@ class IconCache:
                 key=lambda x: x[1][2]
             )
         )
-        ns_finish: int = perf_counter_ns()
-        log('SRT/PRO', f'took {ns_finish - ns_start} nanoseconds')
+        ns_finish: int = perf_counter()
+        log('IDB/SRT', f'took {ns_finish - ns_start} s')
 
 
 class Icon:
