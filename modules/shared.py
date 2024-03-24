@@ -56,7 +56,9 @@ TEXT_AGE: list[str] = [
     'sixteen',
     'seventeen',
     'preteen',
-    'child'
+    'child',
+    '🔞',
+    '⚠️'
 ]
 
 __f = open('src/conversion_tables.json', 'r', encoding='UTF-8')
