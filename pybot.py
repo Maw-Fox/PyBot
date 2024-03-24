@@ -25,17 +25,112 @@ URI_API: str = f'{URI_WWW}/json/api/'
 URI_WSS: str = f'wss://chat.{DOMAIN}/chat2'
 
 CMD_ARG_DEF: dict[str, list] = {}
+DB_PRUNE: dict[str, int] = {
+    'letter': 0,
+    'last': 0,
+    'freeze': False
+}
 
 
-def load_cmd_arg_def() -> None:
+def load_state() -> None:
     f = open('src/cmd_arg_defs.json', 'r', encoding='utf-8')
     obj: dict[str, dict[str, list]] = json.load(f)
     for name in obj:
         CMD_ARG_DEF[name] = obj[name]
     f.close()
+    f = open('data/data.json', 'r', encoding='utf-8')
+    obj: dict[str, dict[str, int]] = json.load(f)
+    for key, value in obj.items():
+        if key == 'db':
+            DB_PRUNE['last'] = value['last']
+            DB_PRUNE['letter'] = value['letter']
+    f.close()
 
 
-load_cmd_arg_def()
+load_state()
+
+
+async def save_state(data: tuple[int, int]) -> None:
+    f = open('data/data.json', 'w', encoding='utf-8')
+    DB_PRUNE['last'] = data[1]
+    DB_PRUNE['letter'] = data[0]
+    DB_PRUNE['freeze'] = False
+    f.write(json.dumps({'db': DB_PRUNE}, indent=4))
+    f.close()
+    log('SVSTATE')
+
+
+async def daily_prune(ts: int) -> None:
+    char_offset: int = 97
+    char: int = (DB_PRUNE['letter'] + 1) % 26
+    string_char = chr(char + char_offset)
+    numerals: list[str] = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+    ]
+    DB_PRUNE['freeze'] = True
+    count: int = 0
+    for item in Icon.db.alp:
+        name: str = item[0]
+        t: int = item[2]
+        if ts - t < 50000:
+            continue
+        if not char:
+            if name[:1] in numerals:
+                count += 1
+                Queue(
+                    Icon.check_valid,
+                    name,
+                    2
+                )
+        if name[:1] == string_char:
+            count += 1
+            Queue(
+                Icon.check_valid,
+                name,
+                2
+            )
+    log('DAY/PRU', f'character: {string_char.upper()}, items: {count}')
+    Queue(
+        save_state,
+        (char, ts),
+        2
+    )
+
+
+async def banlist_prune(
+    args: tuple[str, Channel]
+) -> None:
+    character: str = args[0]
+    channel: Channel = args[1]
+    check_string: str = (
+        "<span id='DisplayedMessage'>No such character exists. " +
+        "<a href='javascript:history.go(-1);'>Back</a></span>"
+    )
+
+    response = requests.post(
+        'https://www.f-list.net/json/api/character-data.php',
+        data={
+            'account': CONFIG.account_name,
+            'ticket': AUTH.auth_key,
+            'name': character,
+        }
+    )
+
+    if response.status_code != 200:
+        return
+
+    response = json.loads(response.text)
+
+    log('PRUNING', f'Character: {character}')
+
+    if response.get('error', '') == 'Character not found.':
+        await SOCKET.send(
+            'CUB',
+            {
+                'channel': channel.name,
+                'character': character
+            }
+        )
 
 
 class Socket:
@@ -95,6 +190,7 @@ class Socket:
                         H.Game.check_save(t)
                     await self.read(code, data)
                 except Exception as error:
+                    raise error
                     log('WEB/ERR', str(error))
 
     async def close(self) -> None:
@@ -246,11 +342,14 @@ class Response:
         if not matches:
             return
         for m in matches:
-            existing: list[str, str, int, int] = Icon.db.pop.get(m[1])
+            m = m[1].lower()
+            existing: bool = Icon.db.valid.get(m)
             if existing:
-                existing[3] += 1
+                if character not in Icon.db.exclusive[m]:
+                    Icon.db.exclusive[m].append(character)
+                    Icon.db.incr(existing)
                 continue
-            Icon(m[1])
+            Icon(m)
 
     async def ERR(
         message: str,
@@ -267,16 +366,10 @@ class Response:
                 Channel(**c_data)
 
     async def LIS(
-        characters: list[tuple[str, str, str, str]]
+        characters: list[list[str]]
     ) -> None:
-        # tuple -> name, gender, status, status msg
         for c_data in characters:
-            Character(
-                c_data[0],
-                c_data[1].lower(),
-                c_data[2].lower(),
-                c_data[3]
-            )
+            Character(*c_data)
 
     async def ICH(
         users: list[dict[str, str]],
@@ -336,6 +429,15 @@ class Response:
         channel: str
     ) -> None:
         log('SYS/DAT', {'message': message, 'channel': channel})
+        if 'Channel bans for ' == message[:17]:
+            entries: list[str] = message[17:].split(', ')
+            chan: Channel = get_chan(channel)
+            for char in entries:
+                Queue(
+                    banlist_prune,
+                    (char, chan),
+                    1
+                )
 
     async def FLN(
         character: str
@@ -361,6 +463,10 @@ class Response:
         get_chan(channel).remove_char(char)
 
     async def PIN() -> None:
+        ts: int = int(time())
+        last: int = DB_PRUNE['last']
+        if ts - last > 86400 and not DB_PRUNE['freeze']:
+            await daily_prune(ts)
         await Output.ping()
 
     async def PRI(
@@ -408,7 +514,7 @@ class Response:
         if message[:1] != '!':
             return
 
-        if not getattr(Command, (message[1:].split(' ')[0])):
+        if not getattr(Command, (message[1:].split(' ')[0]), False):
             return
 
         message = message[1:]
@@ -418,6 +524,7 @@ class Response:
             by=char,
             chan=chan
         )
+
         if (parameters['error']):
             return await output.send(
                 '[b]Error[/b]: ' + parameters['error']
@@ -449,12 +556,13 @@ class Output:
         self.send = self.__send_channel
 
     async def __send_private(self, message) -> None:
-        log('SEN/PRI', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
-        if time() - Queue.last < Queue.throttle:
+        t: float = time()
+        log('SEN/PRI', t - Queue.last, Queue.throttle, suffix='TS:', io=0)
+        if t - Queue.last < Queue.throttle:
             Queue(self.__send_private, message)
             return
 
-        Queue.last = time()
+        Queue.last = t
 
         message: dict[str, str] = {
             'recipient': self.recipient.name,
@@ -464,12 +572,13 @@ class Output:
         await SOCKET.send(f'PRI {json.dumps(message)}')
 
     async def __send_channel(self, message) -> None:
-        log('SEN/MSG', time() - Queue.last, Queue.throttle, suffix='TS:', io=0)
-        if time() - Queue.last < Queue.throttle:
+        t: float = time()
+        log('SEN/MSG', t - Queue.last, Queue.throttle, suffix='TS:', io=0)
+        if t - Queue.last < Queue.throttle:
             Queue(self.__send_channel, message)
             return
 
-        Queue.last = time()
+        Queue.last = t
 
         message: dict[str, str] = {
             'channel': self.channel.name,
@@ -1016,13 +1125,22 @@ class Command:
         selection: str = selection.lower()
         char: H.Character = H.Game.get_character(by.name)
         valid_stat: dict[str, bool] = {
-            'strength': True,
-            'agility': True,
-            'vitality': True
+            'str': True,
+            'agi': True,
+            'vit': True
         }
+        convert: dict[str, str] = {
+            'strength': 'str',
+            'agility': 'agi',
+            'vitality': 'vit'
+        }
+
         sp, pp, ap = char.get_unspent()
 
         if upgrade == 'stat':
+            if convert.get(selection):
+                selection = convert[selection]
+
             if not valid_stat.get(selection):
                 return await output.send(
                     '[b]Error[/b]: No such stat exists.'
@@ -1156,16 +1274,17 @@ class Command:
     ) -> None:
         name: str = name.lower()
         output: Output = Output(recipient=by)
+        item = Icon.db.valid.get(name)
 
-        if not Icon.db.pop.get(name):
+        if not item:
             return await output.send(
                 f'[b]Error[/b]: "{name}" does not exist in the database.'
             )
 
-        valid: bool = Icon.is_valid(name)
+        valid: bool = Icon.is_valid(item[0])
 
         if not valid:
-            Icon.db.remove(name)
+            Icon.db.remove(item)
             return await output.send(
                 f'[b]Icons[/b]: "{name}" removed from the database, thank you!'
             )
@@ -1174,6 +1293,33 @@ class Command:
             f'[b]Icons[/b]: "{name}" is still valid, but thanks for ' +
             'the report!'
         )
+
+    @staticmethod
+    async def status(
+        by: Character,
+        output: Output,
+        message: str = '',
+        status: str = 'online',
+        **kwargs
+    ) -> None:
+        if by.name != 'Kali':
+            return await output.send('Nope, check your privilege.')
+        await SOCKET.send('STA', {
+            'character': CONFIG.bot_name,
+            'statusmsg': message,
+            'status': status
+        })
+
+    @staticmethod
+    async def daily_prune(
+        by: Character,
+        output: Output,
+        **kwargs
+    ) -> None:
+        if by.name != 'Kali':
+            return await output.send('Nope.')
+        await daily_prune(int(time()))
+        await output.send('Yep.')
 
     @staticmethod
     async def icon(
@@ -1187,21 +1333,22 @@ class Command:
         filetype = filetype.lower()
         search = search.lower()
         output: Output = Output(recipient=by)
-        names: list[str] = list(Icon.db.pop.keys())
+        original: list[str] = Icon.db.pop.copy()
         result: list[str] = []
-        T_MAX: int = 2000
+        T_MAX: int = 1000
         page: int = page if page and page > 0 else 1
         out_str: str = 'results'
         sort_t, sort_r, sort_a = ['t' in flags, 'r' in flags, 'a' in flags]
         if sort_a:
-            names = list(Icon.db.alp.keys())
+            original = Icon.db.alp.copy()
         if sort_t:
-            names = list(Icon.db.ver.keys())
+            original = Icon.db.ver.copy()
         if sort_r:
-            names.reverse()
-        for name in names:
-            mime: str = Icon.db.pop[name][1]
-            if search in name or not search:
+            original.reverse()
+        for item in original:
+            name: str = item[0]
+            mime: str = item[1]
+            if not search or search in name:
                 if filetype and filetype != mime:
                     continue
                 if len(result) + 1 > T_MAX * page:
@@ -1215,11 +1362,15 @@ class Command:
                 f'parameters [[b]page:[/b] {page}, ' +
                 '[b]flags:[/b] ' + (flags or 'no-flags') + ', ' +
                 '[b]type:[/b] ' + (filetype or 'any') + ', '
-                f'[b]search:[/b] {search}].'
+                f'[b]search:[/b] ' + (search or '*') + '].'
             )
 
         out_str = (
-            f'[b]{len(result)} {out_str} [db:{len(Icon.db.pop)}]:[/b] '
+            f'{len(result)} {out_str} ' +
+            f'[db:{len(Icon.db.pop)}] [i][[b]page:[/b] {page}, ' +
+            '[b]flags:[/b] ' + (flags or 'no-flags') + ', ' +
+            '[b]type:[/b] ' + (filetype or 'any') + ', '
+            f'[b]search:[/b] ' + (search or '*') + '][/i]:'
         )
 
         await output.send(
@@ -1229,20 +1380,31 @@ class Command:
         )
 
     @staticmethod
+    async def yeeted(
+        output: Output,
+        **kwargs
+    ) -> None:
+        await output.send(
+            f'Total moderation actions taken: [b]{len(MOD_LOGS)}[/b]'
+        )
+        return
+
+    @staticmethod
     async def yeetus(
         by: Character,
-        chan: Channel,
-        output: Output
+        channel: Channel,
+        output: Output,
+        **kwargs
     ) -> None:
 
-        if not chan:
+        if not channel:
             return
 
-        if not chan.is_op(by.name):
+        if not channel.is_op(by.name):
             return
 
-        NEW_STATE: bool = not chan.states.get('yeetus', True)
-        chan.states['yeetus'] = NEW_STATE
+        NEW_STATE: bool = not channel.states.get('yeetus', True)
+        channel.states['yeetus'] = NEW_STATE
 
         if NEW_STATE:
             await output.send(
@@ -1268,7 +1430,7 @@ class Command:
                 'This command requires channel operator status.'
             )
         await output.send(
-            'It\'s time for a murder! Verification process starting!'
+            '[eicon]monsterkill[/eicon]'
         )
         for char in channel.characters:
             char_verify: Verification = Verification(
@@ -1278,8 +1440,30 @@ class Command:
             Queue(
                 char_verify.run,
                 None,
-                True
+                1
             )
+
+    @staticmethod
+    async def banlist(
+        by: Character,
+        channel: Channel,
+        output: Output,
+        **kwargs
+    ) -> None:
+        if channel.states.get('pruning', False):
+            return output.send(
+                '[b]Error[/b]: Already prunin\''
+            )
+        if not channel.is_op(by.name):
+            return await output.send(
+                '[b]Error[/b]: You must construct additional pylons. ' +
+                'This command requires channel operator status.'
+            )
+        await output.send(
+            'I\'m in your lists and I be prunin\'. ~<:'
+        )
+        channel.states['pruning'] = True
+        return await SOCKET.send('CBL', {'channel': channel.name})
 
     @staticmethod
     async def force_save(

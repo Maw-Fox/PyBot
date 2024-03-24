@@ -1,7 +1,6 @@
 import re
 import unicodedata as unicode
 
-from functools import lru_cache
 from time import time
 from math import floor
 from modules.shared import JANK_TO_ASCII_TABLE, TEXT_AGE, TEXT_AGE_FALSEPOS

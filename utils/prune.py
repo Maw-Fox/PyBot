@@ -40,7 +40,7 @@ def log() -> None:
         os.system('cls')
     else:
         os.system('clear')
-    sys.displayhook('\n'.join(Verify.disp))
+    sys.displayhook(''.join(Verify.disp))
 
 
 def get_exists() -> dict[str, tuple[str, str, int, int]]:
@@ -49,8 +49,6 @@ def get_exists() -> dict[str, tuple[str, str, int, int]]:
     lines: list[str] = f.read().split('\n')
     for line in lines:
         name, extension, last_verified, count = line.split(',')
-        if int(last_verified) > MAX_T:
-            continue
         obj[name] = (name, extension, int(last_verified), int(count))
     return obj
 
@@ -66,13 +64,17 @@ class Verify:
         ''
     ]
 
-    def __init__(self, check: str, count: int):
-        self.check: str = check.lower()
+    def __init__(self, name: str, mime: str, t: int, count: int):
+        self.check: str = name.lower()
+        self.mime: str = mime
+        self.t: int = t
         self.count: int = count
-        queue.append(self)
+        queue.append(self.do)
 
     def do(self) -> None:
         Verify.itr()
+        if ARGS.days and self.t < MAX_T:
+            return
         response = requests.get(
             f'https://static.f-list.net/images/eicon/{self.check}.gif'
         )
@@ -105,10 +107,15 @@ class Verify:
 queue: list[Verify] = []
 
 for name in Verify.exists:
-    Verify(name, Verify.exists[name][3])
+    Verify(
+        name,
+        Verify.exists[name][1],
+        Verify.exists[name][2],
+        Verify.exists[name][3]
+    )
 
 for item in queue.copy():
-    item.do()
+    item()
     queue.pop()
 
 
@@ -122,7 +129,7 @@ def finish() -> None:
     for name in Verify.exists:
         name, ext, last, count = Verify.exists[name]
         buffer += f'{name},{ext},{last},{count}\n'
-    f.write(buffer)
+    f.write(buffer[:-1])
     f.close()
 
 

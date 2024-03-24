@@ -139,6 +139,10 @@
     {
       "test": "seven",
       "expects": true
+    },
+    {
+      "test": "Preteen/Child",
+      "expects": true
     }
   ]
 }

@@ -134,8 +134,9 @@ dmypy.json
 # PyBot
 creds.json
 testing.py
-testground.py
 moderation_log.json
 hungry_db.json
 eicon_db.csv
+eicon_db_bk.csv
 blacklist.csv
+data.json

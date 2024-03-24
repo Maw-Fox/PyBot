@@ -209,7 +209,7 @@
             {
                 "name":"Notes",
                 "subtext": [
-                    "The max results per page is 2000. Multiple flags can be used at the same time, such as \"-rt\".\n   By default, the sorting is done by popularity with a secondary alphabetical sort. This is the same sorting algorithm that the database uses."
+                    "The max results per page is 1000. Multiple flags can be used at the same time, such as \"-rt\".\n   By default, the sorting is done by popularity with a secondary alphabetical sort. This is the same sorting algorithm that the database uses."
                 ]
             }
         ]
@@ -238,5 +238,8 @@
     },
     "banlist": {
         "pretense": "Prune banlist."
+    },
+    "yeeted": {
+        "pretense": "Return the number of moderation actions that have occured."
     }
 }

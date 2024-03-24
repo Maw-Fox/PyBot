@@ -79,7 +79,7 @@ class Character():
         self.max_level: int = max_level
         self.wins: list[dict[str, list]] = wins
         self.losses: list[dict[str, list]] = losses
-        self.spent_stat: int = spent_perk
+        self.spent_stat: int = spent_stat
         self.spent_perk: int = spent_perk
         self.spent_ability: int = spent_ability
         self.str: int = strength
